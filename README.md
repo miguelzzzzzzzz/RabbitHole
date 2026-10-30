@@ -8,8 +8,9 @@ versioned JSONL traces, and programmatic trajectory evals. The default policy
 model is a small local model (Qwen3-1.7B, quantized, on CPU); CI never calls a
 model.
 
-**Status:** M1 in progress (package scaffold and CI). No agent, tools, or
-evaluation results yet; every evaluation is "not run".
+**Status:** M1 in progress: package scaffold, CI, tool contracts, and the
+tool registry. No agent loop, concrete tools, or evaluation results yet;
+every evaluation is "not run".
 
 ## Development
 

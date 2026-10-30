@@ -9,7 +9,7 @@ unless they come from a committed report under `evals/results/`.
 
 | ID | Milestone | Status |
 | --- | --- | --- |
-| M1 | Scaffold, tool contracts, registry, calculator, trace schema, local runtime and tool-calling probe | planned |
+| M1 | Scaffold, tool contracts, registry, calculator, trace schema, local runtime and tool-calling probe | in progress |
 | M2 | Agent loop, run state, budgets, timeouts/retries, scripted provider | planned |
 | M3 | Research tools on the project-01 retriever, citations, guardrails | planned |
 | M4 | Task suites, graders, eval runner, oracle and heuristic baselines | planned |

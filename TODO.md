@@ -21,11 +21,11 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [ ] Hosted backend optional only; hosted rows "not run" in reports and README
 - [ ] If Cline returns: add hosted runs as a separately labelled extra (revisit ADR-0009)
 
-## M1 - Scaffold, tool contracts, registry, calculator, trace schema, local runtime and tool-calling probe (planned)
-- [ ] Packaging (src layout, `agentic_research`, `arp` entry point), ruff, mypy --strict, pytest
-- [ ] CI workflow (py3.11 + py3.13; lint, format check, mypy, `pytest -m "not slow"` with coverage)
-- [ ] `Tool` protocol, `ToolContext`, `RetryPolicy`, `ToolResult`/`ToolError` + error-class enum
-- [ ] `ToolRegistry` with JSON-schema export (OpenAI `tools` format), arg/output validation to structured errors
+## M1 - Scaffold, tool contracts, registry, calculator, trace schema, local runtime and tool-calling probe (in progress)
+- [x] Packaging (src layout, `agentic_research`, `arp` entry point), ruff, mypy --strict (src and tests), pytest, 96% branch-coverage floor, autouse network guard (2026-10-30)
+- [x] CI workflow (py3.11 + py3.13; lint, format check, mypy, `pytest -m "not slow"` with coverage) (2026-10-30)
+- [x] `Tool` protocol, `ToolContext`, `RetryPolicy`, `ToolResult`/`ToolError` + error-class enum (2026-10-30)
+- [x] `ToolRegistry` with JSON-schema export (OpenAI `tools` format, checked against the JSON Schema meta-schema), arg/output validation to structured errors (2026-10-30)
 - [ ] `calculator` AST whitelist evaluator with bounds and table-driven rejection tests
 - [ ] Trace schema v1 + JSONL writer/reader + round-trip test
 - [ ] `arp tools schema` command

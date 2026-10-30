@@ -12,3 +12,15 @@ All notable changes to this project are documented here. The format follows
 - Package scaffold (`agentic_research`, `arp --version`), ruff, strict mypy,
   pytest with a 96% branch-coverage floor, an autouse network guard for the
   fast suite, and CI on Python 3.11 and 3.13.
+- Tool contracts (`agentic_research.tools`): the async `Tool` protocol,
+  strict `ToolArgs`/`ToolOutput` bases, `ToolContext`, `ToolResult`, and
+  `ToolError` with the error classes `transient`, `timeout`, `permanent`,
+  `invalid_args`, and `bad_output`. `RetryPolicy` retries only `transient`
+  and `timeout`, with capped exponential backoff and seeded jitter.
+- `ToolRegistry`: validated registration (name format, unique names, strict
+  argument models, positive finite timeouts, async `run`), export in the
+  OpenAI `tools` format, and argument/output validation that returns
+  `invalid_args`/`bad_output` errors instead of raising (unknown tool,
+  invalid or duplicate-key JSON, non-object arguments, schema violations).
+  Schema-violation messages omit input values; messages are capped at 1000
+  characters. mypy now also checks the tests.
