@@ -8,8 +8,19 @@ versioned JSONL traces, and programmatic trajectory evals. The default policy
 model is a small local model (Qwen3-1.7B, quantized, on CPU); CI never calls a
 model.
 
-**Status:** planning docs only. No code, no evaluation results yet. M1
-(scaffold, tool contracts, local runtime and tool-calling probe) is next.
+**Status:** M1 in progress (package scaffold and CI). No agent, tools, or
+evaluation results yet; every evaluation is "not run".
+
+## Development
+
+```bash
+python -m venv .venv && . .venv/bin/activate
+pip install -e ".[dev]"
+ruff check . && ruff format --check . && mypy
+pytest -m "not slow" --cov
+```
+
+The fast suite blocks network access, so it never calls a model.
 
 - [Project spec](PROJECT_SPEC.md)
 - [Milestone plan](PLAN.md)

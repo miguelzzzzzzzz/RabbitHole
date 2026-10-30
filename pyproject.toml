@@ -1,0 +1,67 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "agentic-research-platform"
+version = "0.1.0.dev0"
+description = "Hand-rolled tool-using research agent with typed tools, budgets, guardrails, verified citations, JSONL traces, and programmatic trajectory evals."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+authors = [{ name = "miguelzzzzzzzz" }]
+dependencies = [
+    "pydantic>=2.7,<3",
+]
+
+[project.urls]
+Homepage = "https://github.com/miguelzzzzzzzz/RabbitHole"
+Repository = "https://github.com/miguelzzzzzzzz/RabbitHole"
+Issues = "https://github.com/miguelzzzzzzzz/RabbitHole/issues"
+Changelog = "https://github.com/miguelzzzzzzzz/RabbitHole/blob/main/CHANGELOG.md"
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "ruff>=0.6",
+    "mypy>=1.11",
+]
+
+[project.scripts]
+arp = "agentic_research.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/agentic_research"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+src = ["src", "tests"]
+# Docs keep hand-aligned, indicative code samples; do not format Markdown.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "RUF", "N", "PTH", "C4"]
+
+[tool.mypy]
+python_version = "3.11"
+strict = true
+packages = ["agentic_research"]
+mypy_path = "src"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra --strict-markers"
+markers = [
+    "slow: tests that need a local model server or downloads (deselect with -m 'not slow')",
+    "allow_network: opt out of the autouse network guard (slow tests only)",
+]
+
+[tool.coverage.run]
+source = ["agentic_research"]
+branch = true
+
+[tool.coverage.report]
+fail_under = 96
+show_missing = true
