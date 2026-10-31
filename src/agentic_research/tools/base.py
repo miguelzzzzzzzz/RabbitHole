@@ -63,6 +63,20 @@ class ToolError(BaseModel):
         return self.error_class in RETRYABLE
 
 
+class ToolFailure(Exception):  # noqa: N818 - a failure outcome, not a program error
+    """Raised by a tool's ``run`` to report a classified failure.
+
+    A tool that can tell *why* it failed (bad input it only detects while
+    running, a missing document, an upstream timeout) raises this with a
+    ``ToolError``; the executor (M2) turns it into ``ToolResult.failure``
+    instead of treating it as an unexpected crash.
+    """
+
+    def __init__(self, error: ToolError) -> None:
+        super().__init__(f"{error.error_class.value}/{error.reason}: {error.message}")
+        self.error = error
+
+
 class ToolResult(BaseModel):
     """Outcome of one tool call: exactly one of ``output`` or ``error``."""
 

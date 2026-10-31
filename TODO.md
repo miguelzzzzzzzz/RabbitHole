@@ -26,7 +26,7 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] CI workflow (py3.11 + py3.13; lint, format check, mypy, `pytest -m "not slow"` with coverage) (2026-10-30)
 - [x] `Tool` protocol, `ToolContext`, `RetryPolicy`, `ToolResult`/`ToolError` + error-class enum (2026-10-30)
 - [x] `ToolRegistry` with JSON-schema export (OpenAI `tools` format, checked against the JSON Schema meta-schema), arg/output validation to structured errors (2026-10-30)
-- [ ] `calculator` AST whitelist evaluator with bounds and table-driven rejection tests
+- [x] `calculator` AST whitelist evaluator with bounds, table-driven rejection tests, and hypothesis agreement tests; `ToolFailure` for classified tool failures (2026-10-31)
 - [ ] Trace schema v1 + JSONL writer/reader + round-trip test
 - [ ] `arp tools schema` command
 - [ ] `.env.example`, README skeleton (architecture / usage / evaluation "not run"), CHANGELOG

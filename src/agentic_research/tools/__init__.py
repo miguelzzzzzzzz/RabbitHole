@@ -8,6 +8,7 @@ from agentic_research.tools.base import (
     ToolArgs,
     ToolContext,
     ToolError,
+    ToolFailure,
     ToolOutput,
     ToolResult,
 )
@@ -21,6 +22,7 @@ __all__ = [
     "ToolArgs",
     "ToolContext",
     "ToolError",
+    "ToolFailure",
     "ToolOutput",
     "ToolRegistrationError",
     "ToolRegistry",

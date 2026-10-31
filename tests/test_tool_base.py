@@ -11,6 +11,7 @@ from agentic_research.tools import (
     RetryPolicy,
     ToolContext,
     ToolError,
+    ToolFailure,
     ToolOutput,
     ToolResult,
 )
@@ -179,3 +180,11 @@ def test_tool_context_validates_fields(kwargs: dict[str, object]) -> None:
 
 def test_tool_context_defaults_to_first_attempt() -> None:
     assert ToolContext(run_id="run-1", step=0).attempt == 1
+
+
+def test_tool_failure_carries_its_classified_error() -> None:
+    error = ToolError(error_class=ErrorClass.INVALID_ARGS, reason="bad_input", message="nope")
+    failure = ToolFailure(error)
+    assert failure.error is error
+    assert str(failure) == "invalid_args/bad_input: nope"
+    assert ToolResult.failure("t", failure.error).error == error

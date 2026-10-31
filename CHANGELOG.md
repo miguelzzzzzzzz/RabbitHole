@@ -24,3 +24,15 @@ All notable changes to this project are documented here. The format follows
   invalid or duplicate-key JSON, non-object arguments, schema violations).
   Schema-violation messages omit input values; messages are capped at 1000
   characters. mypy now also checks the tests.
+- `calculator` tool (`agentic_research.tools.calculator`): evaluates one
+  arithmetic expression by walking a whitelisted AST (int/float literals,
+  `+ - * / // % **`, unary `+`/`-`, constants `pi` and `e`, and the functions
+  `abs round min max sqrt exp log log10 log2 sin cos tan floor ceil`); never
+  calls `eval`/`exec`. Inputs are bounded instead of cancelled (ADR-0006):
+  500 characters, 200 AST nodes, depth 100, integers up to 1000 bits (checked
+  after every operation, and `**` refused before computing), finite real
+  results only. Rejections carry reason codes and surface as `invalid_args`;
+  no retries. Table-driven rejection tests and hypothesis tests checking
+  agreement with Python arithmetic; `hypothesis` added to the dev extra.
+- `ToolFailure`: the exception a tool's `run` raises to report a classified
+  `ToolError` (the M2 executor turns it into `ToolResult.failure`).
