@@ -36,3 +36,23 @@ All notable changes to this project are documented here. The format follows
   agreement with Python arithmetic; `hypothesis` added to the dev extra.
 - `ToolFailure`: the exception a tool's `run` raises to report a classified
   `ToolError` (the M2 executor turns it into `ToolResult.failure`).
+- Trace schema v1 (`agentic_research.trace`, ADR-0008): a JSONL file per run
+  whose first line is a header with `schema_version: 1`, `run_id`, and a
+  timezone-aware `started_at`, followed by one span per line: `run` (question,
+  provider/model, tool format, status, answer or error, budget usage and
+  limits, `parse_failures`), `step`, `provider_call` (token usage, finish
+  reason, optional `parse_failure` reason code, error), and `tool_call`
+  (arguments plus exactly one of output or error). Timings are monotonic
+  seconds since the run started; spans can carry point-in-time events.
+  `Trace` checks one root run span, unique ids, parent kinds, contiguous step
+  indexes, and that `parse_failures` matches the provider calls that failed
+  to parse. NaN/infinity in JSON payloads is rejected instead of being
+  written as `null`.
+- `write_trace` (atomic), `TraceWriter` (exclusive create, one flushed line
+  per finished span), and `read_trace`/`loads_trace`. The reader checks
+  `schema_version` first and raises `TraceSchemaVersionError` naming the
+  found and supported versions; other problems raise `TraceError` with a
+  line number, and a file without a run span is reported as incomplete.
+  Round-trip tests (including a hypothesis property and a span from a real
+  calculator run) check that write-then-read gives an identical object and
+  byte-identical text.

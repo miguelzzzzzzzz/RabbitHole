@@ -1,0 +1,51 @@
+"""Versioned JSONL run traces (ADR-0008)."""
+
+from agentic_research.trace.io import (
+    TraceError,
+    TraceSchemaVersionError,
+    TraceWriter,
+    dumps_trace,
+    loads_trace,
+    read_trace,
+    write_trace,
+)
+from agentic_research.trace.schema import (
+    SCHEMA_VERSION,
+    BudgetLimits,
+    BudgetUsage,
+    ParseFailure,
+    ProviderCallSpan,
+    RunSpan,
+    RunStatus,
+    Span,
+    SpanError,
+    SpanEvent,
+    StepSpan,
+    ToolCallSpan,
+    Trace,
+    TraceHeader,
+)
+
+__all__ = [
+    "SCHEMA_VERSION",
+    "BudgetLimits",
+    "BudgetUsage",
+    "ParseFailure",
+    "ProviderCallSpan",
+    "RunSpan",
+    "RunStatus",
+    "Span",
+    "SpanError",
+    "SpanEvent",
+    "StepSpan",
+    "ToolCallSpan",
+    "Trace",
+    "TraceError",
+    "TraceHeader",
+    "TraceSchemaVersionError",
+    "TraceWriter",
+    "dumps_trace",
+    "loads_trace",
+    "read_trace",
+    "write_trace",
+]
