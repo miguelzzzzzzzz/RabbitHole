@@ -56,3 +56,8 @@ All notable changes to this project are documented here. The format follows
   Round-trip tests (including a hypothesis property and a span from a real
   calculator run) check that write-then-read gives an identical object and
   byte-identical text.
+- `arp tools schema [--tool NAME]`: prints the built-in tools (for now
+  `calculator`, from `agentic_research.tools.builtin.default_registry()`) in
+  the OpenAI chat-completions `tools` format. Tests check the output against
+  the JSON Schema 2020-12 meta-schema and that the printed schema accepts and
+  rejects the same arguments as the registry; an unknown tool name exits 2.

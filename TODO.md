@@ -28,7 +28,7 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] `ToolRegistry` with JSON-schema export (OpenAI `tools` format, checked against the JSON Schema meta-schema), arg/output validation to structured errors (2026-10-30)
 - [x] `calculator` AST whitelist evaluator with bounds, table-driven rejection tests, and hypothesis agreement tests; `ToolFailure` for classified tool failures (2026-10-31)
 - [x] Trace schema v1 (`agentic_research.trace`: header + run/step/provider_call/tool_call spans, `parse_failures`), JSONL `write_trace`/`TraceWriter`/`read_trace`, round-trip and schema-version mismatch tests (2026-11-01)
-- [ ] `arp tools schema` command
+- [x] `arp tools schema` command (`--tool NAME`; built-in set from `tools.builtin.default_registry()`; output checked against the JSON Schema meta-schema) (2026-11-01)
 - [ ] `.env.example`, README skeleton (architecture / usage / evaluation "not run"), CHANGELOG
 - [x] Copy approved project ADRs (0001-0009) into `docs/adr/` with index (2026-10-30)
 - [ ] Install a local runtime (Ollama or llama.cpp `llama-server`, `--jinja`); pin Qwen3-1.7B Q4_K_M tag/digest, GGUF sha256, server version, ctx 4096 in `docs/local-models.md`
