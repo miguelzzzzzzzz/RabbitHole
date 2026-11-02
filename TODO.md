@@ -31,8 +31,8 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] `arp tools schema` command (`--tool NAME`; built-in set from `tools.builtin.default_registry()`; output checked against the JSON Schema meta-schema) (2026-11-01)
 - [x] `.env.example` (checked against the `ARP_*` names in the docs; secrets empty), README skeleton (architecture / usage / evaluation "not run"), CHANGELOG (2026-11-02)
 - [x] Copy approved project ADRs (0001-0009) into `docs/adr/` with index (2026-10-30)
-- [ ] Install a local runtime (Ollama or llama.cpp `llama-server`, `--jinja`); pin Qwen3-1.7B Q4_K_M tag/digest, GGUF sha256, server version, ctx 4096 in `docs/local-models.md`
-- [ ] `arp doctor` memory preflight (`MemAvailable` vs GGUF + KV cache + headroom; no swap) + tests with fake `/proc/meminfo`
+- [x] Install a local runtime: llama.cpp `llama-server` b12032 CPU build + Qwen3-1.7B Q4_K_M (`unsloth/Qwen3-1.7B-GGUF` @ `d7f544e`), sha256s, server version, ctx 4096, flags and reported memory buffers pinned in `docs/local-models.md`; `scripts/local_runtime.sh install|verify|serve` (2026-11-02)
+- [ ] `arp doctor` memory preflight (`MemAvailable` vs model + KV + compute buffers + headroom; repacked weights make this about 1.8 GiB, not GGUF + KV, see `docs/local-models.md`; no swap) + `/v1/models` check + tests with fake `/proc/meminfo`
 - [ ] Minimal `OpenAICompatibleProvider` (chat + `tools`, timeout, usage) + MockTransport tests
 - [ ] JSON-in-text tool protocol: strict parser, `<think>` strip, reason codes, `parse_failures` counter + table-driven tests
 - [ ] Freeze commit: `probes/tool_calls.v1.yaml` (20 tool-expecting prompts) + `config/probe.toml` (`probe_sha256`, `min_valid = 18`, `n = 20`) before any probe run

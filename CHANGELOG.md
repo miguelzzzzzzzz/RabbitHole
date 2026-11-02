@@ -69,3 +69,18 @@ All notable changes to this project are documented here. The format follows
 - README skeleton: status, an architecture table marking what is built,
   usage of the current CLI, and an evaluation table where every run,
   including all hosted runs, is "not run".
+- Local model runtime, pinned in `docs/local-models.md` and installed on the
+  dev box: llama.cpp `llama-server` release `b12032` (CPU build, asset
+  sha256 checked) serving Qwen3-1.7B Q4_K_M from
+  `unsloth/Qwen3-1.7B-GGUF` at a fixed revision (GGUF sha256 checked) with a
+  4096-token context. `scripts/local_runtime.sh install|verify|serve`
+  downloads and verifies both files and starts the server on
+  `127.0.0.1:8080` with `--jinja`, one slot, and the RAM prompt cache off
+  (this build defaults it to 8 GiB; the box has no swap). The doc records
+  the server's reported memory buffers (about 1.8 GiB, more than GGUF + KV
+  cache because the weights are repacked for the CPU) as input for
+  `arp doctor`. Tests keep the script's pins, the doc, and `.env.example`
+  in sync and check that `verify`/`serve` refuse missing or wrong-digest
+  files; a `slow` test checks a running server serves the pinned model id.
+- `.env.example`: `ARP_LOCAL_MODEL` is now the served id
+  `Qwen3-1.7B-Q4_K_M`; added `ARP_RUNTIME_DIR`.
