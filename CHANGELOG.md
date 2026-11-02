@@ -61,3 +61,11 @@ All notable changes to this project are documented here. The format follows
   the OpenAI chat-completions `tools` format. Tests check the output against
   the JSON Schema 2020-12 meta-schema and that the printed schema accepts and
   rejects the same arguments as the registry; an unknown tool name exits 2.
+- `.env.example` listing every configuration variable from PROJECT_SPEC
+  section 11 with comments and empty secrets (no code reads them yet). Tests
+  parse it strictly and check that it lists exactly the `ARP_*` names the
+  spec, plan, ADRs, and README mention, that secret values are empty, and the
+  spec's fixed defaults.
+- README skeleton: status, an architecture table marking what is built,
+  usage of the current CLI, and an evaluation table where every run,
+  including all hosted runs, is "not run".
