@@ -10,10 +10,11 @@ model.
 
 **Status:** M1 in progress. Built so far: package scaffold and CI, typed
 tool contracts and a validating tool registry, the `calculator` tool, trace
-schema v1 (JSONL), `arp tools schema`, and a pinned local model runtime
-(llama.cpp `llama-server` + Qwen3-1.7B Q4_K_M). Not built yet: the agent loop, the
-model provider, research tools, citations, guardrails, and evals. No model
-has been run, so every evaluation below is "not run".
+schema v1 (JSONL), `arp tools schema`, a pinned local model runtime
+(llama.cpp `llama-server` + Qwen3-1.7B Q4_K_M), and `arp doctor` (memory
+preflight + serve-flag + `/v1/models` checks). Not built yet: the agent loop,
+the model provider, research tools, citations, guardrails, and evals. No
+probe or eval has been run, so every evaluation below is "not run".
 
 ## Architecture
 
@@ -26,7 +27,7 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | `calculator` | AST-whitelist arithmetic, bounded, no `eval` | built (M1) |
 | Trace schema v1 | one JSONL file per run: header + run/step/provider_call/tool_call spans, `parse_failures` | built (M1) |
 | Local runtime | Qwen3-1.7B (GGUF Q4_K_M) on CPU behind llama.cpp `llama-server`, pinned by sha256 in [docs/local-models.md](docs/local-models.md) | installed (M1) |
-| `arp doctor` | memory preflight and server check before live runs | M1, not built |
+| `arp doctor` | memory preflight (reported buffers + headroom vs `MemAvailable`), pinned serve-flag check, `/v1/models` | built (M1) |
 | `OpenAICompatibleProvider` + JSON-in-text parser | chat completions with native `tools` or a strict JSON-in-text protocol; the M1 probe picks the default | M1, not built |
 | Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | M2 |
 | Research tools, citations, guardrails | `search_corpus`/`read_document` over [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0`; citations checked against exact spans; allowlists and loop detection | M3 |
@@ -41,6 +42,7 @@ pip install -e ".[dev]"
 arp --version
 arp tools schema                  # all built-in tools, OpenAI `tools` format
 arp tools schema --tool calculator
+arp doctor                        # MemAvailable + serve flags + /v1/models
 ```
 
 Local model server (dev box only; CI never runs it), see
@@ -49,15 +51,17 @@ Local model server (dev box only; CI never runs it), see
 ```bash
 scripts/local_runtime.sh install   # llama.cpp CPU build + GGUF, sha256-verified
 scripts/local_runtime.sh serve     # http://127.0.0.1:8080/v1, model Qwen3-1.7B-Q4_K_M
+arp doctor                         # refuse a live run if memory/flags/server fail
 ```
 
-Planned commands (not built yet): `arp doctor`, `arp probe tool-calls`,
-`arp run`, `arp eval`, `arp trace show`.
+Planned commands (not built yet): `arp probe tool-calls`, `arp run`,
+`arp eval`, `arp trace show`.
 
 Configuration comes from environment variables, all listed with comments
-in [`.env.example`](.env.example) (secrets empty). The Python package reads
-none of them yet; each group names the milestone that wires it in.
-`scripts/local_runtime.sh` reads `ARP_RUNTIME_DIR` and `ARP_LOCAL_CTX`.
+in [`.env.example`](.env.example) (secrets empty). `arp doctor` reads
+`ARP_LLM_BASE_URL`, `ARP_LOCAL_MODEL`, `ARP_LOCAL_CTX`, and
+`ARP_MIN_FREE_MB`. `scripts/local_runtime.sh` reads `ARP_RUNTIME_DIR` and
+`ARP_LOCAL_CTX`. Other groups name the milestone that wires them in.
 
 ## Evaluation
 

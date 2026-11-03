@@ -1,6 +1,6 @@
 """Command-line entry point (`arp`).
 
-Implemented: ``arp tools schema``. Later milestones add ``doctor``,
+Implemented: ``arp tools schema``, ``arp doctor``. Later milestones add
 ``probe tool-calls``, ``run``, ``eval``, and ``trace show``.
 """
 
@@ -12,6 +12,7 @@ import sys
 from collections.abc import Sequence
 
 from agentic_research import __version__
+from agentic_research.preflight import run_doctor
 from agentic_research.tools.builtin import default_registry
 
 
@@ -26,6 +27,12 @@ def _tools_schema(args: argparse.Namespace) -> int:
         schemas = [s for s in schemas if s["function"]["name"] == args.tool]
     print(json.dumps(schemas, indent=2, ensure_ascii=False))
     return 0
+
+
+def _doctor(_args: argparse.Namespace) -> int:
+    report = run_doctor()
+    print(report.format())
+    return 0 if report.ok else 1
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -43,6 +50,12 @@ def build_parser() -> argparse.ArgumentParser:
     schema.add_argument("--tool", metavar="NAME", help="print only this tool")
     schema.set_defaults(handler=_tools_schema)
     tools.set_defaults(help_parser=tools)
+
+    doctor = commands.add_parser(
+        "doctor",
+        help="memory preflight and local-server check before live runs",
+    )
+    doctor.set_defaults(handler=_doctor)
     return parser
 
 

@@ -6,6 +6,15 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- `arp doctor` (`agentic_research.preflight`): memory preflight that compares
+  `MemAvailable` from `/proc/meminfo` to the pinned server's reported
+  model + KV + compute buffers (1819.36 MiB from `docs/local-models.md`) plus
+  `ARP_MIN_FREE_MB` headroom (default 1024). Swap is reported but never
+  counted toward the budget. Also checks the intended serve flags match the
+  pin (`-c 4096`, `--cache-ram 0`, `-np 1`, loopback, `--jinja`, `--seed 0`,
+  alias `Qwen3-1.7B-Q4_K_M`) and that `GET {ARP_LLM_BASE_URL}/models` lists
+  that alias. Tests use a fake meminfo file and a mocked models client; the
+  CLI exits 0 on pass and 1 on refuse.
 - Project spec, milestone plan, TODO, and architecture decision records
   0001-0009 in `docs/adr/` (2026-10-30). Pre-repository planning changes are
   in `docs/planning-history.md`.

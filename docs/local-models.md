@@ -80,10 +80,13 @@ Allocations that `llama-server` reported when loading with the flags above
 So the server needs about 1.8 GiB that the kernel cannot reclaim, which is
 more than "GGUF size + KV cache" (1056 + 448 MiB) because the repacked weights
 are a second copy. Process RSS also counts the clean page-cache pages of
-the mapped GGUF file, which the kernel can drop. `arp doctor` (next M1
-step) should budget the reported model, KV, and compute buffers plus the
-`ARP_MIN_FREE_MB` headroom, not the GGUF size alone. The 1 GB default
-headroom covers the gap today, but the check should not rely on that.
+the mapped GGUF file, which the kernel can drop. `arp doctor` budgets the
+sum of the four buffers above (1819.36 MiB) plus the `ARP_MIN_FREE_MB`
+headroom (default 1024), not the GGUF size alone, and compares that to
+`MemAvailable`. Swap is reported but never counted. It also refuses if the
+intended serve flags would enable the prompt cache (`--cache-ram` must be 0)
+or set a context other than 4096, and checks that `{ARP_LLM_BASE_URL}/models`
+lists the pinned alias.
 
 ## Box
 
