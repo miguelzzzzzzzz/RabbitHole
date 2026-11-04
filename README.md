@@ -11,10 +11,12 @@ model.
 **Status:** M1 in progress. Built so far: package scaffold and CI, typed
 tool contracts and a validating tool registry, the `calculator` tool, trace
 schema v1 (JSONL), `arp tools schema`, a pinned local model runtime
-(llama.cpp `llama-server` + Qwen3-1.7B Q4_K_M), and `arp doctor` (memory
-preflight + serve-flag + `/v1/models` checks). Not built yet: the agent loop,
-the model provider, research tools, citations, guardrails, and evals. No
-probe or eval has been run, so every evaluation below is "not run".
+(llama.cpp `llama-server` + Qwen3-1.7B Q4_K_M), `arp doctor` (memory
+preflight + serve-flag + `/v1/models` checks), and a minimal
+`OpenAICompatibleProvider` (httpx, native `tool_calls` parsing). Not built
+yet: the JSON-in-text parser, the tool-calling probe, the agent loop,
+research tools, citations, guardrails, and evals. No probe or eval has been
+run, so every evaluation below is "not run".
 
 ## Architecture
 
@@ -28,7 +30,8 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | Trace schema v1 | one JSONL file per run: header + run/step/provider_call/tool_call spans, `parse_failures` | built (M1) |
 | Local runtime | Qwen3-1.7B (GGUF Q4_K_M) on CPU behind llama.cpp `llama-server`, pinned by sha256 in [docs/local-models.md](docs/local-models.md) | installed (M1) |
 | `arp doctor` | memory preflight (reported buffers + headroom vs `MemAvailable`), pinned serve-flag check, `/v1/models` | built (M1) |
-| `OpenAICompatibleProvider` + JSON-in-text parser | chat completions with native `tools` or a strict JSON-in-text protocol; the M1 probe picks the default | M1, not built |
+| `OpenAICompatibleProvider` | async httpx chat completions with optional `tools`, usage, native `tool_calls` parsing (local server) | built (M1) |
+| JSON-in-text tool protocol + probe | strict JSON-in-text parser; frozen 20-prompt probe picks native vs json default | M1, not built |
 | Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | M2 |
 | Research tools, citations, guardrails | `search_corpus`/`read_document` over [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0`; citations checked against exact spans; allowlists and loop detection | M3 |
 | Task suites, graders, eval runner | programmatic trajectory graders; oracle and heuristic baselines | M4 |
@@ -58,10 +61,11 @@ Planned commands (not built yet): `arp probe tool-calls`, `arp run`,
 `arp eval`, `arp trace show`.
 
 Configuration comes from environment variables, all listed with comments
-in [`.env.example`](.env.example) (secrets empty). `arp doctor` reads
-`ARP_LLM_BASE_URL`, `ARP_LOCAL_MODEL`, `ARP_LOCAL_CTX`, and
-`ARP_MIN_FREE_MB`. `scripts/local_runtime.sh` reads `ARP_RUNTIME_DIR` and
-`ARP_LOCAL_CTX`. Other groups name the milestone that wires them in.
+in [`.env.example`](.env.example) (secrets empty). `arp doctor` and
+`OpenAICompatibleProvider` read `ARP_LLM_BASE_URL` and `ARP_LOCAL_MODEL`;
+`arp doctor` also reads `ARP_LOCAL_CTX` and `ARP_MIN_FREE_MB`.
+`scripts/local_runtime.sh` reads `ARP_RUNTIME_DIR` and `ARP_LOCAL_CTX`.
+Other groups name the milestone that wires them in.
 
 ## Evaluation
 

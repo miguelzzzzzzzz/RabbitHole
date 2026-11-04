@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Added
+- Minimal `OpenAICompatibleProvider` (`agentic_research.providers`, ADR-0003): async httpx client against `{ARP_LLM_BASE_URL}/chat/completions` (default `http://127.0.0.1:8080/v1`), model from `ARP_LOCAL_MODEL` (default `Qwen3-1.7B-Q4_K_M`), optional Bearer API key that never appears in `repr` or error text, temperature 0 / seed 0 by default, and `chat_template_kwargs.enable_thinking=false` for Qwen3 non-thinking mode. Parses native `tool_calls` (arguments as a JSON string or object; malformed arguments keep `arguments_raw` + `parse_error` and are not guessed), content-only replies, and empty `tool_calls`. Typed errors: `local_server_unavailable`, HTTP errors, malformed JSON/shape. No HostedProvider, retries, runaway guard, or recording (M5). Tests use `httpx.MockTransport` under the network guard; one `@pytest.mark.slow` live test starts/stops the pinned local server. `httpx` is a runtime dependency; `pytest-asyncio` is a dev dependency.
 - `arp doctor` (`agentic_research.preflight`): memory preflight that compares
   `MemAvailable` from `/proc/meminfo` to the pinned server's reported
   model + KV + compute buffers (1819.36 MiB from `docs/local-models.md`) plus

@@ -33,7 +33,7 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] Copy approved project ADRs (0001-0009) into `docs/adr/` with index (2026-10-30)
 - [x] Install a local runtime: llama.cpp `llama-server` b12032 CPU build + Qwen3-1.7B Q4_K_M (`unsloth/Qwen3-1.7B-GGUF` @ `d7f544e`), sha256s, server version, ctx 4096, flags and reported memory buffers pinned in `docs/local-models.md`; `scripts/local_runtime.sh install|verify|serve` (2026-11-02)
 - [x] `arp doctor` memory preflight (`MemAvailable` vs model + KV + compute buffers + headroom; repacked weights make this about 1.8 GiB, not GGUF + KV, see `docs/local-models.md`; swap reported but never counted) + pinned serve-flag check (`-c 4096`, `--cache-ram 0`) + `/v1/models` check + tests with fake `/proc/meminfo` (2026-11-03)
-- [ ] Minimal `OpenAICompatibleProvider` (chat + `tools`, timeout, usage) + MockTransport tests
+- [x] Minimal `OpenAICompatibleProvider` (chat + `tools`, timeout, usage, native `tool_calls` parsing) + MockTransport tests + one slow live Qwen test (2026-11-04)
 - [ ] JSON-in-text tool protocol: strict parser, `<think>` strip, reason codes, `parse_failures` counter + table-driven tests
 - [ ] Freeze commit: `probes/tool_calls.v1.yaml` (20 tool-expecting prompts) + `config/probe.toml` (`probe_sha256`, `min_valid = 18`, `n = 20`) before any probe run
 - [ ] `arp probe tool-calls` (native vs json; refuses dirty tree / hash mismatch) -> raw `k/20` + 95% Wilson CI per format in `docs/providers.md` + `smoke-only` report; config test for default format
