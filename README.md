@@ -13,10 +13,10 @@ tool contracts and a validating tool registry, the `calculator` tool, trace
 schema v1 (JSONL), `arp tools schema`, a pinned local model runtime
 (llama.cpp `llama-server` + Qwen3-1.7B Q4_K_M), `arp doctor` (memory
 preflight + serve-flag + `/v1/models` checks), and a minimal
-`OpenAICompatibleProvider` (httpx, native `tool_calls` parsing). Not built
-yet: the JSON-in-text parser, the tool-calling probe, the agent loop,
-research tools, citations, guardrails, and evals. No probe or eval has been
-run, so every evaluation below is "not run".
+`OpenAICompatibleProvider` (httpx, native `tool_calls` parsing), and the
+strict JSON-in-text tool protocol parser. Not built yet: the tool-calling
+probe, the agent loop, research tools, citations, guardrails, and evals. No
+probe or eval has been run, so every evaluation below is "not run".
 
 ## Architecture
 
@@ -31,7 +31,8 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | Local runtime | Qwen3-1.7B (GGUF Q4_K_M) on CPU behind llama.cpp `llama-server`, pinned by sha256 in [docs/local-models.md](docs/local-models.md) | installed (M1) |
 | `arp doctor` | memory preflight (reported buffers + headroom vs `MemAvailable`), pinned serve-flag check, `/v1/models` | built (M1) |
 | `OpenAICompatibleProvider` | async httpx chat completions with optional `tools`, usage, native `tool_calls` parsing (local server) | built (M1) |
-| JSON-in-text tool protocol + probe | strict JSON-in-text parser; frozen 20-prompt probe picks native vs json default | M1, not built |
+| JSON-in-text tool protocol | strict parser, `<think>` strip, reason codes, `parse_failures` counter | built (M1) |
+| Tool-calling probe | frozen 20-prompt probe picks native vs json default | M1, not built |
 | Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | M2 |
 | Research tools, citations, guardrails | `search_corpus`/`read_document` over [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0`; citations checked against exact spans; allowlists and loop detection | M3 |
 | Task suites, graders, eval runner | programmatic trajectory graders; oracle and heuristic baselines | M4 |

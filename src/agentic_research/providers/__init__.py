@@ -18,6 +18,13 @@ from agentic_research.providers.openai_compat import (
     parse_tool_calls,
     parse_usage,
 )
+from agentic_research.providers.toolcall_json import (
+    ParsedFinalAnswer,
+    ParsedToolCall,
+    ParseFailureCounter,
+    ToolCallJsonResult,
+    parse_toolcall_json,
+)
 from agentic_research.providers.types import (
     ChatMessage,
     ChatProvider,
@@ -39,15 +46,20 @@ __all__ = [
     "FunctionCall",
     "LocalServerUnavailableError",
     "OpenAICompatibleProvider",
+    "ParseFailureCounter",
+    "ParsedFinalAnswer",
+    "ParsedToolCall",
     "ProviderError",
     "ProviderHTTPError",
     "ProviderResponseError",
     "TokenUsage",
     "ToolCall",
+    "ToolCallJsonResult",
     "base_url_from_environ",
     "model_from_environ",
     "parse_chat_completion",
     "parse_function_arguments",
     "parse_tool_calls",
+    "parse_toolcall_json",
     "parse_usage",
 ]
