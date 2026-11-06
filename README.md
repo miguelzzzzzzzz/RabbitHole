@@ -16,7 +16,7 @@ preflight + serve-flag + `/v1/models` checks), and a minimal
 `OpenAICompatibleProvider` (httpx, native `tool_calls` parsing), and the
 strict JSON-in-text tool protocol parser, and the frozen tool-calling probe
 prompts + 18/20 bar (`probes/tool_calls.v1.yaml`, `config/probe.toml`). Not
-built yet: the agent loop, research tools, citations, guardrails, and evals. `arp probe tool-calls` is implemented; the live local run is still pending, so every evaluation below is "not run".
+built yet: the agent loop, research tools, citations, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
 
 ## Architecture
 
@@ -32,7 +32,7 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | `arp doctor` | memory preflight (reported buffers + headroom vs `MemAvailable`), pinned serve-flag check, `/v1/models` | built (M1) |
 | `OpenAICompatibleProvider` | async httpx chat completions with optional `tools`, usage, native `tool_calls` parsing (local server) | built (M1) |
 | JSON-in-text tool protocol | strict parser, `<think>` strip, reason codes, `parse_failures` counter | built (M1) |
-| Tool-calling probe | frozen 20-prompt probe picks native vs json default | built (M1); live run pending |
+| Tool-calling probe | frozen 20-prompt probe picks native vs json default | built (M1); default `native` |
 | Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | M2 |
 | Research tools, citations, guardrails | `search_corpus`/`read_document` over [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0`; citations checked against exact spans; allowlists and loop detection | M3 |
 | Task suites, graders, eval runner | programmatic trajectory graders; oracle and heuristic baselines | M4 |
@@ -75,7 +75,7 @@ committed report under `evals/results/`.
 
 | Run | Model | Status |
 | --- | --- | --- |
-| M1 tool-calling probe (`native` vs `json`, 20 prompts) | Qwen3-1.7B Q4_K_M, local CPU | not run |
+| M1 tool-calling probe (`native` vs `json`, 20 prompts) | Qwen3-1.7B Q4_K_M, local CPU | smoke-only: native 20/20, json 10/20 → default `native` ([report](evals/results/m1-toolcall-probe-20261106T011244Z.json)) |
 | Oracle and heuristic baselines | none (no model) | not run |
 | Local live eval, `dev` split (baseline) | Qwen3-1.7B Q4_K_M, local CPU | not run |
 | Fault-injection and ablation runs | Qwen3-1.7B Q4_K_M, local CPU | not run |

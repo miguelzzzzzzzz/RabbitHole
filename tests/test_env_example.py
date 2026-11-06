@@ -94,9 +94,17 @@ def test_spec_defaults(env: dict[str, str], key: str, value: str) -> None:
     assert env[key] == value
 
 
-def test_tool_format_unset_until_probe(env: dict[str, str]) -> None:
-    # The default comes from the M1 probe's pre-registered rule, not a guess.
-    assert env["ARP_TOOL_FORMAT"] in {"", "native", "json"}
+def test_tool_format_matches_probe_decision(env: dict[str, str]) -> None:
+    """ARP_TOOL_FORMAT must match the committed M1 probe chosen_default."""
+    import json
+
+    reports = sorted((ROOT / "evals" / "results").glob("m1-toolcall-probe-*.json"))
+    assert reports, "expected a committed m1-toolcall-probe-*.json report"
+    chosen = json.loads(reports[-1].read_text(encoding="utf-8"))["chosen_default"]
+    assert chosen in {"native", "json"}
+    assert env["ARP_TOOL_FORMAT"] == chosen
+    providers = (ROOT / "docs" / "providers.md").read_text(encoding="utf-8")
+    assert f"**Chosen default:** `{chosen}`" in providers
 
 
 def test_local_base_url_is_loopback(env: dict[str, str]) -> None:

@@ -37,7 +37,8 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] JSON-in-text tool protocol: strict parser, `<think>` strip, reason codes, `parse_failures` counter + table-driven tests (2026-11-05)
 - [x] Freeze commit: `probes/tool_calls.v1.yaml` (20 tool-expecting prompts) + `config/probe.toml` (`probe_sha256`, `min_valid = 18`, `n = 20`) before any probe run (2026-11-06)
 - [x] `arp probe tool-calls` implemented (native vs json; refuses dirty tree / hash mismatch; Wilson CI; decision rule; smoke-only report) (2026-11-06)
-- [ ] Live `arp probe tool-calls` on the box → commit raw replies + `docs/providers.md` + set `ARP_TOOL_FORMAT`; config test for default format; then Chad's M1 review
+- [x] Live `arp probe tool-calls` on the box (2026-11-06): native 20/20, json 10/20, chosen default `native`; report + docs/providers.md + ARP_TOOL_FORMAT=native committed
+- [ ] Chad's M1 review (ask after this cycle)
 
 ## Eval hygiene (from CitationNeeded M4 review; wire into M4/M6)
 - [ ] Equal depth / like-for-like: same search `k`, budgets, and scoring cut across compared modes; test where one doc owns several top chunks; per-task `n_retrieved < k`

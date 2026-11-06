@@ -1,0 +1,1224 @@
+{
+  "label": "smoke-only",
+  "headline_eligible": false,
+  "rule_version": 1,
+  "decision_rule": "native becomes default only if schema-valid on at least 18/20 tool-expecting prompts and its count is not lower than json's; otherwise default is json",
+  "chosen_default": "native",
+  "probe_file": "probes/tool_calls.v1.yaml",
+  "probe_sha256": "e6a6d2c3952a03bb8a2ef0134b269505103a9e2efecade355210ca35e87c1711",
+  "freeze_commit_sha": "fc7512fbf8739ad6e2767fb126d5e8ed89cb83db",
+  "head_commit_sha": "1699f1c0f0af32d3af0f176aca07f4d3366fcd79",
+  "min_valid": 18,
+  "n": 20,
+  "temperature": 0.0,
+  "seed": 0,
+  "enable_thinking": false,
+  "model": "Qwen3-1.7B-Q4_K_M",
+  "formats": {
+    "native": {
+      "schema_valid": 20,
+      "n": 20,
+      "raw": "20/20",
+      "wilson_95": [
+        0.83887,
+        1.0
+      ],
+      "no_tool_correct": 5,
+      "n_no_tool": 5,
+      "parse_failures": 0,
+      "scores": [
+        {
+          "prompt_id": "calc_01",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 2297.409651975613,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "17 * 23"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "4iJcELpt4IScf5y113oUsuy20gYrywsK",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "17 * 23"
+                },
+                "arguments_raw": "{\"expression\": \"17 * 23\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "calc_02",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1058.9502040529624,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "(128 + 64) / 4"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "am5hZ0tDHzX4XSJgHSHvR0jPThRRGDZR",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "(128 + 64) / 4"
+                },
+                "arguments_raw": "{\"expression\": \"(128 + 64) / 4\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "calc_03",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 841.2177759455517,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "sqrt(144)"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "jzP6wHPRYvZhJimQemdIW5BtjOutCHuC",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "sqrt(144)"
+                },
+                "arguments_raw": "{\"expression\": \"sqrt(144)\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "calc_04",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 875.6090250099078,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "2 ** 10"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "Y6fzvGL6FSLC7wzctJr6g0H3TmCBogNT",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "2 ** 10"
+                },
+                "arguments_raw": "{\"expression\": \"2 ** 10\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "calc_05",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1411.046029010322,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "3.5 * 2.5"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "lPOXFQO1BgDx9ZzmQqVBusPdFe6TOWKQ",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "3.5 * 2.5"
+                },
+                "arguments_raw": "{\"expression\": \"3.5 * 2.5\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "calc_06",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 2154.972733987961,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "sin(0)"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "sVmZMwGKqP3yxvTQIa5l1F5jl1RaOrEc",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "sin(0)"
+                },
+                "arguments_raw": "{\"expression\": \"sin(0)\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "calc_07",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 988.3841749979183,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "100 // 7"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "4mGaVhjOslB9bF4oOZyAL8ayHCLiJs96",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "100 // 7"
+                },
+                "arguments_raw": "{\"expression\": \"100 // 7\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "calc_08",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1860.9455510159023,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "abs(-42)"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "ZpGD1MPnRVoX93bXTxznEmreDHEJyrsV",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "abs(-42)"
+                },
+                "arguments_raw": "{\"expression\": \"abs(-42)\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "calc_09",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1238.106702978257,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "round(pi, 2)"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "AZyLdt6T2XKs89753V94vMo527l0PJU8",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "round(pi, 2)"
+                },
+                "arguments_raw": "{\"expression\": \"round(pi, 2)\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "calc_10",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1565.3504789806902,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "log10(1000)"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "u5jSEmpk1cpEKG93SkRilqiirvkg882W",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "log10(1000)"
+                },
+                "arguments_raw": "{\"expression\": \"log10(1000)\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "calc_11",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1047.7189290104434,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "15 % 4"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "y8Wlfgd9ZufJ5rhwJzsNTpwT3BhmEG7i",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "15 % 4"
+                },
+                "arguments_raw": "{\"expression\": \"15 % 4\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "calc_12",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 2547.0404290244915,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "floor(3.7) + ceil(1.2)"
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "Q1Cth4bH72Ymr6vCNMZW3VCE2hEd27ks",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "floor(3.7) + ceil(1.2)"
+                },
+                "arguments_raw": "{\"expression\": \"floor(3.7) + ceil(1.2)\"}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "search_01",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1370.6953310174868,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "retrieval-augmented generation",
+            "k": 5
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "cynPftVt8AjVDwCFqN6Ykx943SEncKZG",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "retrieval-augmented generation",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"retrieval-augmented generation\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "search_02",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1422.6712270174176,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "citation verification",
+            "k": 5
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "21ZeQKsgjmkjQkaoTONQqPoMOEh4bKLD",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "citation verification",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"citation verification\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "search_03",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1519.559288979508,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "hybrid fusion",
+            "k": 3
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "7g8lIGj0UREY9dtZQYhjDpnqE1PwxP7L",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "hybrid fusion",
+                  "k": 3
+                },
+                "arguments_raw": "{\"query\": \"hybrid fusion\", \"k\": 3}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "search_04",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1159.4381750328466,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "transformer attention",
+            "k": 5,
+            "filters": null
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "gsk1hC4NVnlreDYy2SEXUTUl29fBoCrL",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "transformer attention",
+                  "k": 5,
+                  "filters": null
+                },
+                "arguments_raw": "{\"query\": \"transformer attention\", \"k\": 5, \"filters\": null}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "search_05",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1257.4728729669005,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "BM25 ranking",
+            "k": 5
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "VUQXgmtF6AuExZxMrrQKg2CUXFF8FaLd",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "BM25 ranking",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"BM25 ranking\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "search_06",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1079.6057539992034,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "chunking strategies",
+            "k": 5
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "f4mXMJ5VdHuz2yUi5RrXKV7Ebvbh4SdL",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "chunking strategies",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"chunking strategies\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "search_07",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1024.921218981035,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "reranking",
+            "k": 5
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "Scn5wEf4ZuVY5NoF0B028CWDf3xFXW0i",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "reranking",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"reranking\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "search_08",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1361.317577015143,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "vector embeddings",
+            "k": 5
+          },
+          "raw_content": "",
+          "raw_tool_calls": [
+            {
+              "id": "6Z9EDPi2rtturKGM3ducCTxZd3KG4cVQ",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "vector embeddings",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"vector embeddings\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ]
+        },
+        {
+          "prompt_id": "notool_01",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 396.94738399703056,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "ready",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "notool_02",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 454.3320499942638,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "The capital of France is Paris.",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "notool_03",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 401.6756739583798,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "Hello, I'm here to help.",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "notool_04",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 244.23974403180182,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "Gracias.",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "notool_05",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 409.35631399042904,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "Yes, water is typically described as wet.",
+          "raw_tool_calls": null
+        }
+      ]
+    },
+    "json": {
+      "schema_valid": 10,
+      "n": 20,
+      "raw": "10/20",
+      "wilson_95": [
+        0.299295,
+        0.700705
+      ],
+      "no_tool_correct": 0,
+      "n_no_tool": 5,
+      "parse_failures": 15,
+      "scores": [
+        {
+          "prompt_id": "calc_01",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 1734.7490239772014,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "{\"action\":\"calculator\",\"arguments\":{\"expression\":\"17*23\"}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "calc_02",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1695.3782250056975,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "(128 + 64) / 4"
+          },
+          "raw_content": "```json\n{\n  \"action\": \"tool_call\",\n  \"tool\": \"calculator\",\n  \"arguments\": {\n    \"expression\": \"(128 + 64) / 4\"\n  }\n}\n```",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "calc_03",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 868.4868540149182,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "sqrt(144)"
+          },
+          "raw_content": "{\"action\":\"tool_call\",\"tool\":\"calculator\",\"arguments\":{\"expression\":\"sqrt(144)\"}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "calc_04",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 749.7426900081336,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "2 ** 10"
+          },
+          "raw_content": "{\"action\":\"tool_call\",\"tool\":\"calculator\",\"arguments\":{\"expression\":\"2 ** 10\"}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "calc_05",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1347.5391819956712,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "3.5 * 2.5"
+          },
+          "raw_content": "```json\n{\n  \"action\": \"tool_call\",\n  \"tool\": \"calculator\",\n  \"arguments\": {\n    \"expression\": \"3.5 * 2.5\"\n  }\n}\n```",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "calc_06",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 657.4045709567145,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "sin(0)"
+          },
+          "raw_content": "{\"action\":\"tool_call\",\"tool\":\"calculator\",\"arguments\":{\"expression\":\"sin(0)\"}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "calc_07",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1546.6990030254237,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "100 // 7"
+          },
+          "raw_content": "```json\n{\n  \"action\": \"tool_call\",\n  \"tool\": \"calculator\",\n  \"arguments\": {\n    \"expression\": \"100 // 7\"\n  }\n}\n```",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "calc_08",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 584.6112839644775,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "{\"action\":\"calculator\",\"arguments\":{\"expression\":\"abs(-42)\"}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "calc_09",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 912.6066400203854,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "round(pi, 2)"
+          },
+          "raw_content": "{\"action\":\"tool_call\",\"tool\":\"calculator\",\"arguments\":{\"expression\":\"round(pi, 2)\"}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "calc_10",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 886.1651259940118,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "log10(1000)"
+          },
+          "raw_content": "{\"action\":\"tool_call\",\"tool\":\"calculator\",\"arguments\":{\"expression\":\"log10(1000)\"}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "calc_11",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 652.1825160016306,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "{\"action\":\"calculator\",\"arguments\":{\"expression\":\"15%4\"}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "calc_12",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1625.6071529933251,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "floor(3.7) + ceil(1.2)"
+          },
+          "raw_content": "```json\n{\n  \"action\": \"tool_call\",\n  \"tool\": \"calculator\",\n  \"arguments\": {\n    \"expression\": \"floor(3.7) + ceil(1.2)\"\n  }\n}\n```",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "search_01",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 919.9745649821125,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "{\"action\":\"search_corpus\",\"arguments\":{\"query\":\"retrieval-augmented generation\",\"k\":5,\"filters\":{\"type\":\"string\"}}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "search_02",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 1116.2206699955277,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "```json\n{\n  \"action\": \"search_corpus\",\n  \"query\": \"citation verification\",\n  \"k\": 5,\n  \"filters\": {}\n}\n```",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "search_03",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 841.4734890102409,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "{\"action\":\"search_corpus\",\"tool\":\"search_corpus\",\"arguments\":{\"query\":\"hybrid fusion\",\"k\":3,\"filters\":{}} }",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "search_04",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 779.9834510078654,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "{\"action\":\"search_corpus\",\"arguments\":{\"query\":\"transformer attention\",\"k\":5,\"filters\":{\"type\":\"string\"}}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "search_05",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 991.5811160462908,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "BM25 ranking",
+            "k": 5,
+            "filters": {
+              "type": "string"
+            }
+          },
+          "raw_content": "{\"action\":\"tool_call\",\"tool\":\"search_corpus\",\"arguments\":{\"query\":\"BM25 ranking\",\"k\":5,\"filters\":{\"type\":\"string\"}}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "search_06",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 758.5646779625677,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "{\"action\":\"search_corpus\",\"query\":\"chunking strategies\",\"k\":5,\"filters\":{\"type\":\"text\"}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "search_07",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 1120.1695349882357,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "{\"action\":\"search_corpus\",\"arguments\":{\"query\":\"reranking\",\"k\":5,\"filters\":{\"type\":\"string\"}}}",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "search_08",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 1789.6950879949145,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "```json\n{\n  \"action\": \"search_corpus\",\n  \"arguments\": {\n    \"query\": \"vector embeddings\",\n    \"k\": 5,\n    \"filters\": {}\n  }\n}\n```",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "notool_01",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "leading_content",
+          "latency_ms": 151.71588899102062,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "ready",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "notool_02",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "leading_content",
+          "latency_ms": 308.5292280302383,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "The capital of France is Paris.",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "notool_03",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "leading_content",
+          "latency_ms": 328.92980001633987,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "Hello, I'm here to help.",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "notool_04",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "leading_content",
+          "latency_ms": 380.3119769436307,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "Thank you in Spanish is \"¡Gracias!\".",
+          "raw_tool_calls": null
+        },
+        {
+          "prompt_id": "notool_05",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "leading_content",
+          "latency_ms": 1564.3233580049127,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "Water is typically described as wet, but it is not entirely accurate to say it is always wet, as it can exist in various states (solid, liquid, gas) and its wetness depends on the context.",
+          "raw_tool_calls": null
+        }
+      ]
+    }
+  },
+  "doctor": {
+    "ok": true,
+    "formatted": "arp doctor\nrequired RAM: 1819.36 MiB reported buffers + 1024 MiB headroom = 2843.36 MiB\nserve flags: -c 4096 --cache-ram 0 -np 1 --host 127.0.0.1 --port 8080 --alias Qwen3-1.7B-Q4_K_M --jinja --seed 0\nbase URL: http://127.0.0.1:8080/v1\nMemAvailable: 6530.43 MiB; SwapTotal: 0.00 MiB\n[ok] serve_flags: context 4096, --cache-ram 0, -np 1, prompt cache disabled\n[ok] memory: MemAvailable 6530.43 MiB >= required 2843.36 MiB (buffers 1819.36 + headroom 1024)\n[ok] models: http://127.0.0.1:8080/v1/models lists Qwen3-1.7B-Q4_K_M\npass",
+    "required_mib": 2843.36,
+    "mem_available_mib": 6530.42578125,
+    "checks": [
+      {
+        "name": "serve_flags",
+        "ok": true,
+        "reason": "ok",
+        "message": "context 4096, --cache-ram 0, -np 1, prompt cache disabled"
+      },
+      {
+        "name": "memory",
+        "ok": true,
+        "reason": "ok",
+        "message": "MemAvailable 6530.43 MiB >= required 2843.36 MiB (buffers 1819.36 + headroom 1024)"
+      },
+      {
+        "name": "models",
+        "ok": true,
+        "reason": "ok",
+        "message": "http://127.0.0.1:8080/v1/models lists Qwen3-1.7B-Q4_K_M"
+      }
+    ]
+  },
+  "metadata": {
+    "date": "2026-11-06T09:12:44+08:00",
+    "model_gguf_sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+    "llama_cpp_build": "b12032",
+    "llama_cpp_version": "0.8.0-dev (build 12032, commit dde879bc4)",
+    "launch_flags": "llama-server -m <GGUF> --alias Qwen3-1.7B-Q4_K_M --host 127.0.0.1 --port 8080 -c 4096 -np 1 --jinja --cache-ram 0 --seed 0",
+    "source": "/workspace/portfolio/agentic-research-platform/docs/local-models.md"
+  },
+  "note": "n=20 gives a wide Wilson interval; passing the bar shows 'probably usable', not '90% reliable'. Reliability is measured by parse_failures on full M5 runs."
+}
