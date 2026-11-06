@@ -16,9 +16,7 @@ preflight + serve-flag + `/v1/models` checks), and a minimal
 `OpenAICompatibleProvider` (httpx, native `tool_calls` parsing), and the
 strict JSON-in-text tool protocol parser, and the frozen tool-calling probe
 prompts + 18/20 bar (`probes/tool_calls.v1.yaml`, `config/probe.toml`). Not
-built yet: `arp probe tool-calls`, the agent loop, research tools, citations,
-guardrails, and evals. No probe or eval has been run, so every evaluation
-below is "not run".
+built yet: the agent loop, research tools, citations, guardrails, and evals. `arp probe tool-calls` is implemented; the live local run is still pending, so every evaluation below is "not run".
 
 ## Architecture
 
@@ -34,7 +32,7 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | `arp doctor` | memory preflight (reported buffers + headroom vs `MemAvailable`), pinned serve-flag check, `/v1/models` | built (M1) |
 | `OpenAICompatibleProvider` | async httpx chat completions with optional `tools`, usage, native `tool_calls` parsing (local server) | built (M1) |
 | JSON-in-text tool protocol | strict parser, `<think>` strip, reason codes, `parse_failures` counter | built (M1) |
-| Tool-calling probe | frozen 20-prompt probe picks native vs json default | freeze committed (M1); runner not built |
+| Tool-calling probe | frozen 20-prompt probe picks native vs json default | built (M1); live run pending |
 | Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | M2 |
 | Research tools, citations, guardrails | `search_corpus`/`read_document` over [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0`; citations checked against exact spans; allowlists and loop detection | M3 |
 | Task suites, graders, eval runner | programmatic trajectory graders; oracle and heuristic baselines | M4 |
@@ -49,6 +47,7 @@ arp --version
 arp tools schema                  # all built-in tools, OpenAI `tools` format
 arp tools schema --tool calculator
 arp doctor                        # MemAvailable + serve flags + /v1/models
+arp probe tool-calls              # frozen native vs json probe (local model)
 ```
 
 Local model server (dev box only; CI never runs it), see
@@ -60,8 +59,7 @@ scripts/local_runtime.sh serve     # http://127.0.0.1:8080/v1, model Qwen3-1.7B-
 arp doctor                         # refuse a live run if memory/flags/server fail
 ```
 
-Planned commands (not built yet): `arp probe tool-calls`, `arp run`,
-`arp eval`, `arp trace show`.
+Planned commands (not built yet): `arp run`, `arp eval`, `arp trace show`.
 
 Configuration comes from environment variables, all listed with comments
 in [`.env.example`](.env.example) (secrets empty). `arp doctor` and

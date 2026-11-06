@@ -36,7 +36,8 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] Minimal `OpenAICompatibleProvider` (chat + `tools`, timeout, usage, native `tool_calls` parsing) + MockTransport tests + one slow live Qwen test (2026-11-04)
 - [x] JSON-in-text tool protocol: strict parser, `<think>` strip, reason codes, `parse_failures` counter + table-driven tests (2026-11-05)
 - [x] Freeze commit: `probes/tool_calls.v1.yaml` (20 tool-expecting prompts) + `config/probe.toml` (`probe_sha256`, `min_valid = 18`, `n = 20`) before any probe run (2026-11-06)
-- [ ] `arp probe tool-calls` (native vs json; refuses dirty tree / hash mismatch) -> raw `k/20` + 95% Wilson CI per format in `docs/providers.md` + `smoke-only` report; config test for default format
+- [x] `arp probe tool-calls` implemented (native vs json; refuses dirty tree / hash mismatch; Wilson CI; decision rule; smoke-only report) (2026-11-06)
+- [ ] Live `arp probe tool-calls` on the box → commit raw replies + `docs/providers.md` + set `ARP_TOOL_FORMAT`; config test for default format; then Chad's M1 review
 
 ## Eval hygiene (from CitationNeeded M4 review; wire into M4/M6)
 - [ ] Equal depth / like-for-like: same search `k`, budgets, and scoring cut across compared modes; test where one doc owns several top chunks; per-task `n_retrieved < k`

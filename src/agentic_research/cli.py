@@ -1,7 +1,7 @@
 """Command-line entry point (`arp`).
 
-Implemented: ``arp tools schema``, ``arp doctor``. Later milestones add
-``probe tool-calls``, ``run``, ``eval``, and ``trace show``.
+Implemented: ``arp tools schema``, ``arp doctor``, ``arp probe tool-calls``.
+Later milestones add ``run``, ``eval``, and ``trace show``.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from collections.abc import Sequence
 
 from agentic_research import __version__
 from agentic_research.preflight import run_doctor
+from agentic_research.probe import run_probe_cli
 from agentic_research.tools.builtin import default_registry
 
 
@@ -33,6 +34,10 @@ def _doctor(_args: argparse.Namespace) -> int:
     report = run_doctor()
     print(report.format())
     return 0 if report.ok else 1
+
+
+def _probe_tool_calls(_args: argparse.Namespace) -> int:
+    return run_probe_cli()
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -56,6 +61,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="memory preflight and local-server check before live runs",
     )
     doctor.set_defaults(handler=_doctor)
+
+    probe = commands.add_parser("probe", help="frozen evaluation probes")
+    probe_commands = probe.add_subparsers(dest="probe_command", metavar="COMMAND")
+    tool_calls = probe_commands.add_parser(
+        "tool-calls",
+        help="run the frozen native-vs-json tool-calling probe (local model; slow)",
+    )
+    tool_calls.set_defaults(handler=_probe_tool_calls)
+    probe.set_defaults(help_parser=probe)
+
     return parser
 
 
