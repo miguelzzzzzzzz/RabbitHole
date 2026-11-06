@@ -1,0 +1,21 @@
+# Frozen M1 tool-calling probe bar (PLAN M1 / ADR-0009).
+# Do not edit the bar or prompts after results are recorded; bump rule_version
+# and use a new probe file (tool_calls.v2.yaml) instead.
+
+probe_file = "probes/tool_calls.v1.yaml"
+probe_sha256 = "e6a6d2c3952a03bb8a2ef0134b269505103a9e2efecade355210ca35e87c1711"
+min_valid = 18
+n = 20
+rule_version = 1
+
+# Request settings used by `arp probe tool-calls` (must match the freeze).
+temperature = 0.0
+seed = 0
+enable_thinking = false
+model = "Qwen3-1.7B-Q4_K_M"
+formats = ["native", "json"]
+label = "smoke-only"
+
+# Decision rule (fixed before the first run): native becomes the default only
+# if schema-valid on at least min_valid of n tool-expecting prompts AND its
+# count is not lower than json's; otherwise default is json.

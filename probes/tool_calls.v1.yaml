@@ -1,0 +1,110 @@
+# Frozen M1 tool-calling probe (rule_version 1). Do not edit in place after
+# results are recorded; bump to tool_calls.v2.yaml + rule_version 2 instead.
+version: 1
+id: tool_calls.v1
+description: >
+  Twenty tool-expecting prompts over calculator and a stub search_corpus
+  schema, plus a few no-tool prompts scored separately. Temperature 0,
+  non-thinking. Fixed before any probe run (PLAN M1).
+tools:
+  - calculator
+  - search_corpus
+prompts:
+  # --- calculator (12) -------------------------------------------------------
+  - id: calc_01
+    expect: tool_call
+    tool: calculator
+    user: "Use the calculator tool to compute 17 * 23."
+  - id: calc_02
+    expect: tool_call
+    tool: calculator
+    user: "Call calculator with expression (128 + 64) / 4."
+  - id: calc_03
+    expect: tool_call
+    tool: calculator
+    user: "What is sqrt(144)? Use the calculator tool."
+  - id: calc_04
+    expect: tool_call
+    tool: calculator
+    user: "Evaluate 2 ** 10 with the calculator."
+  - id: calc_05
+    expect: tool_call
+    tool: calculator
+    user: "Use calculator to compute 3.5 * 2.5."
+  - id: calc_06
+    expect: tool_call
+    tool: calculator
+    user: "Call the calculator tool for sin(0)."
+  - id: calc_07
+    expect: tool_call
+    tool: calculator
+    user: "Compute 100 // 7 using the calculator."
+  - id: calc_08
+    expect: tool_call
+    tool: calculator
+    user: "Use calculator to evaluate abs(-42)."
+  - id: calc_09
+    expect: tool_call
+    tool: calculator
+    user: "Call calculator with expression round(pi, 2)."
+  - id: calc_10
+    expect: tool_call
+    tool: calculator
+    user: "What is log10(1000)? Use the calculator tool."
+  - id: calc_11
+    expect: tool_call
+    tool: calculator
+    user: "Compute 15 % 4 with the calculator."
+  - id: calc_12
+    expect: tool_call
+    tool: calculator
+    user: "Use calculator for floor(3.7) + ceil(1.2)."
+  # --- search_corpus stub (8) ------------------------------------------------
+  - id: search_01
+    expect: tool_call
+    tool: search_corpus
+    user: "Search the corpus for passages about retrieval-augmented generation."
+  - id: search_02
+    expect: tool_call
+    tool: search_corpus
+    user: "Use search_corpus to find documents mentioning citation verification."
+  - id: search_03
+    expect: tool_call
+    tool: search_corpus
+    user: "Call search_corpus with query hybrid fusion and k=3."
+  - id: search_04
+    expect: tool_call
+    tool: search_corpus
+    user: "Look up transformer attention in the research corpus via search_corpus."
+  - id: search_05
+    expect: tool_call
+    tool: search_corpus
+    user: "Use search_corpus to find content about BM25 ranking."
+  - id: search_06
+    expect: tool_call
+    tool: search_corpus
+    user: "Query the corpus for chunking strategies with search_corpus."
+  - id: search_07
+    expect: tool_call
+    tool: search_corpus
+    user: "Search the corpus for passages discussing reranking."
+  - id: search_08
+    expect: tool_call
+    tool: search_corpus
+    user: "Find corpus passages about vector embeddings using search_corpus."
+  # --- no-tool (scored separately; not part of the 20) -----------------------
+  - id: notool_01
+    expect: no_tool
+    user: "Reply with exactly the single word: ready. Do not call any tool."
+  - id: notool_02
+    expect: no_tool
+    user: "What is the capital of France? Answer from general knowledge without tools."
+  - id: notool_03
+    expect: no_tool
+    user: "Say hello in one short sentence. Do not call any tool."
+  - id: notool_04
+    expect: no_tool
+    user: "Translate thank you to Spanish from your knowledge. No tools."
+  - id: notool_05
+    expect: no_tool
+    user: "Is water typically described as wet? One-sentence opinion, no tools."
