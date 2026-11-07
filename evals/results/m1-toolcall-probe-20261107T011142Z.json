@@ -1,0 +1,1674 @@
+{
+  "label": "smoke-only",
+  "headline_eligible": false,
+  "rule_version": 1,
+  "decision_rule": "native becomes default only if schema-valid on at least 18/20 tool-expecting prompts and its count is not lower than json's; otherwise default is json",
+  "chosen_default": "native",
+  "probe_file": "probes/tool_calls.v1.yaml",
+  "probe_sha256": "e6a6d2c3952a03bb8a2ef0134b269505103a9e2efecade355210ca35e87c1711",
+  "freeze_commit_sha": "fc7512fbf8739ad6e2767fb126d5e8ed89cb83db",
+  "head_commit_sha": "b8dd596f82035d9cd06cc8aeaf4ce919cf628861",
+  "min_valid": 18,
+  "n": 20,
+  "temperature": 0.0,
+  "seed": 0,
+  "enable_thinking": false,
+  "model": "Qwen3-1.7B-Q4_K_M",
+  "formats": {
+    "native": {
+      "schema_valid": 20,
+      "n": 20,
+      "raw": "20/20",
+      "wilson_95": [
+        0.83887,
+        1.0
+      ],
+      "no_tool_correct": 5,
+      "n_no_tool": 5,
+      "parse_failures": 0,
+      "parse_failures_scope": "all_prompts",
+      "parse_failures_n_prompts": 25,
+      "parse_failures_tool": 0,
+      "parse_failures_no_tool": 0,
+      "scores": [
+        {
+          "prompt_id": "calc_01",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 2105.7034909608774,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "17 * 23"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "8mKp9mEZcvZSdrGwAyLzwStDJYeiRBwQ",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "17 * 23"
+                },
+                "arguments_raw": "{\"expression\": \"17 * 23\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 566,
+            "completion_tokens": 24,
+            "total_tokens": 590
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_02",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1167.104680032935,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "(128 + 64) / 4"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "Gut899SC7VPwvEaBIve0ZNAz1fLk6Puq",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "(128 + 64) / 4"
+                },
+                "arguments_raw": "{\"expression\": \"(128 + 64) / 4\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 569,
+            "completion_tokens": 29,
+            "total_tokens": 598
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_03",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 859.5510250306688,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "sqrt(144)"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "qP71MMNHckG4e4c9RagfNBwHy6dmKjzZ",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "sqrt(144)"
+                },
+                "arguments_raw": "{\"expression\": \"sqrt(144)\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 565,
+            "completion_tokens": 24,
+            "total_tokens": 589
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_04",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 797.277026984375,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "2 ** 10"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "CaKvpQ0xA0WsV9biJegaxPdZNS3W37vP",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "2 ** 10"
+                },
+                "arguments_raw": "{\"expression\": \"2 ** 10\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 563,
+            "completion_tokens": 23,
+            "total_tokens": 586
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_05",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1001.627818972338,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "3.5 * 2.5"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "qNnMY2fE9xx75MrW2x8BfRXoEdR6EFhL",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "3.5 * 2.5"
+                },
+                "arguments_raw": "{\"expression\": \"3.5 * 2.5\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 566,
+            "completion_tokens": 26,
+            "total_tokens": 592
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_06",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 768.1375550455414,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "sin(0)"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "ND8S1YmlOFgN0O5JCcXs6abeYdXHakYG",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "sin(0)"
+                },
+                "arguments_raw": "{\"expression\": \"sin(0)\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 561,
+            "completion_tokens": 22,
+            "total_tokens": 583
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_07",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 851.7214999883436,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "100 // 7"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "wssma2OgjiwVkW1I4JyaorUWuPM4tScM",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "100 // 7"
+                },
+                "arguments_raw": "{\"expression\": \"100 // 7\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 564,
+            "completion_tokens": 24,
+            "total_tokens": 588
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_08",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 804.9196469946764,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "abs(-42)"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "2tv5v4iw4PEBoR2Sv3Ml2jYgv5raKc66",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "abs(-42)"
+                },
+                "arguments_raw": "{\"expression\": \"abs(-42)\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 561,
+            "completion_tokens": 23,
+            "total_tokens": 584
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_09",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 858.6508680018596,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "round(pi, 2)"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "OTCPiAR3qkfapCmdujDWREjvS1WiuTtl",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "round(pi, 2)"
+                },
+                "arguments_raw": "{\"expression\": \"round(pi, 2)\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 562,
+            "completion_tokens": 24,
+            "total_tokens": 586
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_10",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 907.0664099999703,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "log10(1000)"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "IrXpgcBJrrr1eeGkN2C6ZBCtRdjd3BhF",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "log10(1000)"
+                },
+                "arguments_raw": "{\"expression\": \"log10(1000)\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 568,
+            "completion_tokens": 27,
+            "total_tokens": 595
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_11",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 857.5820460100658,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "15 % 4"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "7o92m9I76p4gfaT8RmAokCIpg8UCpYTR",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "15 % 4"
+                },
+                "arguments_raw": "{\"expression\": \"15 % 4\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 563,
+            "completion_tokens": 23,
+            "total_tokens": 586
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_12",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1124.1915990249254,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "floor(3.7) + ceil(1.2)"
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "2FdVjt3hdlcQHdZ9j1RI8wsgWwMEAxFH",
+              "type": "function",
+              "function": {
+                "name": "calculator",
+                "arguments": {
+                  "expression": "floor(3.7) + ceil(1.2)"
+                },
+                "arguments_raw": "{\"expression\": \"floor(3.7) + ceil(1.2)\"}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 568,
+            "completion_tokens": 31,
+            "total_tokens": 599
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_01",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1117.089623992797,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "retrieval-augmented generation",
+            "k": 5
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "yYq2qVfQzLq9bwS6gjYy6KcfiAdABA6B",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "retrieval-augmented generation",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"retrieval-augmented generation\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 564,
+            "completion_tokens": 32,
+            "total_tokens": 596
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_02",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 952.2555869771168,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "citation verification",
+            "k": 5
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "giGKSYpiBhnfThEEVmHx0W4vrcW0COIk",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "citation verification",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"citation verification\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 562,
+            "completion_tokens": 27,
+            "total_tokens": 589
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_03",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 975.8959139580838,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "hybrid fusion",
+            "k": 3
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "UnubZFfqtw90DxwQdBeMTpAVLF18b2vO",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "hybrid fusion",
+                  "k": 3
+                },
+                "arguments_raw": "{\"query\": \"hybrid fusion\", \"k\": 3}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 564,
+            "completion_tokens": 28,
+            "total_tokens": 592
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_04",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 928.0584070365876,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "transformer attention",
+            "k": 5
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "ckux2BNOTfSy0JGVL6z8mYQqwR4F12xY",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "transformer attention",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"transformer attention\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 564,
+            "completion_tokens": 28,
+            "total_tokens": 592
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_05",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 994.3053480237722,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "BM25 ranking",
+            "k": 5
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "RBdjSz5ztWRzBPu1c7oeJD8BTLqn9bW7",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "BM25 ranking",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"BM25 ranking\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 564,
+            "completion_tokens": 29,
+            "total_tokens": 593
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_06",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 987.1971929678693,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "chunking strategies",
+            "k": 5
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "qGb4O9bFVLg5Jk5pLJpqFu3WfwG7bm3E",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "chunking strategies",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"chunking strategies\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 563,
+            "completion_tokens": 28,
+            "total_tokens": 591
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_07",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 942.3830320010893,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "reranking",
+            "k": 5
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "4LP8J6I9cWzlHQB5hixtV25ZucWpbWjW",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "reranking",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"reranking\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 561,
+            "completion_tokens": 27,
+            "total_tokens": 588
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_08",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 910.235974995885,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "vector embeddings",
+            "k": 5
+          },
+          "raw_content": "<think>\n\n</think>\n\n",
+          "raw_tool_calls": [
+            {
+              "id": "xiAahmZOGxi03dnjLmzWPFTrY8nkldOm",
+              "type": "function",
+              "function": {
+                "name": "search_corpus",
+                "arguments": {
+                  "query": "vector embeddings",
+                  "k": 5
+                },
+                "arguments_raw": "{\"query\": \"vector embeddings\", \"k\": 5}",
+                "parse_error": null
+              }
+            }
+          ],
+          "finish_reason": "tool_calls",
+          "usage": {
+            "prompt_tokens": 562,
+            "completion_tokens": 27,
+            "total_tokens": 589
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "notool_01",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 160.52184696309268,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\nready",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 567,
+            "completion_tokens": 2,
+            "total_tokens": 569
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "notool_02",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 333.88444397132844,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\nThe capital of France is Paris.",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 566,
+            "completion_tokens": 8,
+            "total_tokens": 574
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "notool_03",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 419.09211402526125,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\nHello, how can I assist you today?",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 565,
+            "completion_tokens": 10,
+            "total_tokens": 575
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "notool_04",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 212.81364402966574,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\nGracias.",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 564,
+            "completion_tokens": 4,
+            "total_tokens": 568
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "notool_05",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 419.29944400908425,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\nYes, water is typically described as wet.",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 567,
+            "completion_tokens": 10,
+            "total_tokens": 577
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        }
+      ]
+    },
+    "json": {
+      "schema_valid": 6,
+      "n": 20,
+      "raw": "6/20",
+      "wilson_95": [
+        0.145475,
+        0.518977
+      ],
+      "no_tool_correct": 2,
+      "n_no_tool": 5,
+      "parse_failures": 17,
+      "parse_failures_scope": "all_prompts",
+      "parse_failures_n_prompts": 25,
+      "parse_failures_tool": 14,
+      "parse_failures_no_tool": 3,
+      "scores": [
+        {
+          "prompt_id": "calc_01",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1786.123931990005,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "17*23"
+          },
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"tool_call\",\"tool\":\"calculator\",\"arguments\":{\"expression\":\"17*23\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 517,
+            "completion_tokens": 21,
+            "total_tokens": 538
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_02",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 786.41806403175,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"calculator\",\"arguments\":{\"expression\":\"(128 + 64)/4\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 520,
+            "completion_tokens": 21,
+            "total_tokens": 541
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_03",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 823.9693120121956,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "sqrt(144)"
+          },
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"tool_call\",\"tool\":\"calculator\",\"arguments\":{\"expression\":\"sqrt(144)\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 516,
+            "completion_tokens": 22,
+            "total_tokens": 538
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_04",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 554.5336719951592,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"calculator\",\"arguments\":{\"expression\":\"2 ** 10\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 514,
+            "completion_tokens": 16,
+            "total_tokens": 530
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_05",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 604.4418049859814,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"calculator\",\"arguments\":{\"expression\":\"3.5*2.5\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 517,
+            "completion_tokens": 18,
+            "total_tokens": 535
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_06",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 636.8924309499562,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "sin(0)"
+          },
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"tool_call\",\"tool\":\"calculator\",\"arguments\":{\"expression\":\"sin(0)\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 512,
+            "completion_tokens": 20,
+            "total_tokens": 532
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_07",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 594.844025967177,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"calculator\",\"arguments\":{\"expression\":\"100 // 7\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 515,
+            "completion_tokens": 17,
+            "total_tokens": 532
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_08",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 614.8020639666356,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"calculator\",\"arguments\":{\"expression\":\"abs(-42)\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 512,
+            "completion_tokens": 16,
+            "total_tokens": 528
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_09",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 729.0574149810709,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "round(pi, 2)"
+          },
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"tool_call\",\"tool\":\"calculator\",\"arguments\":{\"expression\":\"round(pi, 2)\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 513,
+            "completion_tokens": 22,
+            "total_tokens": 535
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_10",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 798.9972389768809,
+          "tool_name": "calculator",
+          "arguments": {
+            "expression": "log10(1000)"
+          },
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"tool_call\",\"tool\":\"calculator\",\"arguments\":{\"expression\":\"log10(1000)\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 519,
+            "completion_tokens": 25,
+            "total_tokens": 544
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_11",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 586.4341260166839,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"calculator\",\"arguments\":{\"expression\":\"15%4\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 514,
+            "completion_tokens": 15,
+            "total_tokens": 529
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "calc_12",
+          "expect": "tool_call",
+          "expected_tool": "calculator",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 832.8634019708261,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"calculator\",\"arguments\":{\"expression\":\"floor(3.7)+ceil(1.2)\"}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 519,
+            "completion_tokens": 23,
+            "total_tokens": 542
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_01",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 1024.046119011473,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"search_corpus\",\"arguments\":{\"query\":\"retrieval-augmented generation\",\"k\":5,\"filters\":{\"type\":\"string\"}}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 515,
+            "completion_tokens": 30,
+            "total_tokens": 545
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_02",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": true,
+          "correct_tool_name": true,
+          "schema_valid_args": true,
+          "correct_no_tool": false,
+          "schema_valid": true,
+          "parse_failure_reason": null,
+          "latency_ms": 1214.269466989208,
+          "tool_name": "search_corpus",
+          "arguments": {
+            "query": "citation verification",
+            "k": 5,
+            "filters": {
+              "type": "string"
+            }
+          },
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"tool_call\",\"tool\":\"search_corpus\",\"arguments\":{\"query\":\"citation verification\",\"k\":5,\"filters\":{\"type\":\"string\"}}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 513,
+            "completion_tokens": 30,
+            "total_tokens": 543
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_03",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 1182.610182033386,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"search_corpus\",\"tool\":\"search_corpus\",\"arguments\":{\"query\":\"hybrid fusion\",\"k\":3,\"filters\":{\"type\":\"string\"}}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 515,
+            "completion_tokens": 31,
+            "total_tokens": 546
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_04",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 981.4777929568663,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"search_corpus\",\"arguments\":{\"query\":\"transformer attention\",\"k\":5,\"filters\":{\"type\":\"text\"}}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 515,
+            "completion_tokens": 26,
+            "total_tokens": 541
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_05",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 1197.4879329791293,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"search_corpus\",\"arguments\":{\"query\":\"BM25 ranking\",\"k\":5,\"filters\":{\"type\":\"string\"}}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 515,
+            "completion_tokens": 27,
+            "total_tokens": 542
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_06",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 1023.1543550034985,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"search_corpus\",\"arguments\":{\"query\":\"chunking strategies\",\"k\":5,\"filters\":{\"type\":\"text\"}}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 514,
+            "completion_tokens": 26,
+            "total_tokens": 540
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_07",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 871.783905022312,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"search_corpus\",\"arguments\":{\"query\":\"reranking\",\"k\":5,\"filters\":{\"type\":\"string\"}}}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 512,
+            "completion_tokens": 25,
+            "total_tokens": 537
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "search_08",
+          "expect": "tool_call",
+          "expected_tool": "search_corpus",
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "unknown_action",
+          "latency_ms": 1338.313582004048,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n```json\n{\n  \"action\": \"search_corpus\",\n  \"arguments\": {\n    \"query\": \"vector embeddings\",\n    \"k\": 5,\n    \"filters\": {}\n  }\n}\n```",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 513,
+            "completion_tokens": 42,
+            "total_tokens": 555
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "notool_01",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "leading_content",
+          "latency_ms": 167.17466298723593,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\nready",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 518,
+            "completion_tokens": 2,
+            "total_tokens": 520
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "notool_02",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "leading_content",
+          "latency_ms": 339.4117170246318,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\nThe capital of France is Paris.",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 517,
+            "completion_tokens": 8,
+            "total_tokens": 525
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "notool_03",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 465.32516897423193,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"final_answer\",\"answer\":\"Hello!\"}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 516,
+            "completion_tokens": 12,
+            "total_tokens": 528
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "notool_04",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": true,
+          "schema_valid": false,
+          "parse_failure_reason": null,
+          "latency_ms": 424.2715460131876,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\n{\"action\":\"final_answer\",\"answer\":\"Gracias\"}",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 515,
+            "completion_tokens": 12,
+            "total_tokens": 527
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        },
+        {
+          "prompt_id": "notool_05",
+          "expect": "no_tool",
+          "expected_tool": null,
+          "structurally_valid": false,
+          "correct_tool_name": false,
+          "schema_valid_args": false,
+          "correct_no_tool": false,
+          "schema_valid": false,
+          "parse_failure_reason": "leading_content",
+          "latency_ms": 922.106496989727,
+          "tool_name": null,
+          "arguments": null,
+          "raw_content": "<think>\n\n</think>\n\nWater is typically described as wet, but this is a simplification, as water's properties can vary depending on the context.",
+          "raw_tool_calls": null,
+          "finish_reason": "stop",
+          "usage": {
+            "prompt_tokens": 518,
+            "completion_tokens": 26,
+            "total_tokens": 544
+          },
+          "reasoning_content": null,
+          "multiple_tool_calls": false
+        }
+      ]
+    }
+  },
+  "doctor": {
+    "ok": true,
+    "formatted": "arp doctor\nrequired RAM: 1819.36 MiB reported buffers + 1024 MiB headroom = 2843.36 MiB\nserve flags (observed): -c 4096 --cache-ram 0 -np 1 --host 127.0.0.1 --port 8080 --alias Qwen3-1.7B-Q4_K_M --jinja --seed 0 --reasoning-format none\nbase URL: http://127.0.0.1:8080/v1\nobserved pid: 1841259\nmodel sha256 (observed): b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897\nllama-server --version (observed): 0.8.0-dev (build 12032, commit dde879bc4)\nMemAvailable: 4777.05 MiB; SwapTotal: 0.00 MiB\n[ok] serve_flags: (observed) context 4096, --cache-ram 0, -np 1, --reasoning-format none, prompt cache disabled\n[ok] memory: MemAvailable 4777.05 MiB >= required 2843.36 MiB (buffers 1819.36 + headroom 1024)\n[ok] models: http://127.0.0.1:8080/v1/models lists Qwen3-1.7B-Q4_K_M\npass",
+    "required_mib": 2843.36,
+    "mem_available_mib": 4777.05078125,
+    "observed": {
+      "pid": 1841259,
+      "cmdline": [
+        "/workspace/portfolio/runtime/llama-b12032/llama-server",
+        "-m",
+        "/workspace/portfolio/runtime/models/Qwen3-1.7B-Q4_K_M.gguf",
+        "--alias",
+        "Qwen3-1.7B-Q4_K_M",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8080",
+        "-c",
+        "4096",
+        "-np",
+        "1",
+        "--jinja",
+        "--cache-ram",
+        "0",
+        "--seed",
+        "0",
+        "--reasoning-format",
+        "none"
+      ],
+      "model_sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+      "llama_version": "0.8.0-dev (build 12032, commit dde879bc4)",
+      "observation_error": null,
+      "flags": {
+        "ctx": 4096,
+        "cache_ram_mib": 0,
+        "np": 1,
+        "host": "127.0.0.1",
+        "port": 8080,
+        "alias": "Qwen3-1.7B-Q4_K_M",
+        "jinja": true,
+        "seed": 0,
+        "reasoning_format": "none",
+        "model_path": "/workspace/portfolio/runtime/models/Qwen3-1.7B-Q4_K_M.gguf"
+      }
+    },
+    "checks": [
+      {
+        "name": "serve_flags",
+        "ok": true,
+        "reason": "ok",
+        "message": "(observed) context 4096, --cache-ram 0, -np 1, --reasoning-format none, prompt cache disabled"
+      },
+      {
+        "name": "memory",
+        "ok": true,
+        "reason": "ok",
+        "message": "MemAvailable 4777.05 MiB >= required 2843.36 MiB (buffers 1819.36 + headroom 1024)"
+      },
+      {
+        "name": "models",
+        "ok": true,
+        "reason": "ok",
+        "message": "http://127.0.0.1:8080/v1/models lists Qwen3-1.7B-Q4_K_M"
+      }
+    ]
+  },
+  "metadata": {
+    "date": "2026-11-07T09:11:42+08:00",
+    "model_gguf_sha256": {
+      "value": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+      "provenance": "observed"
+    },
+    "llama_cpp_build": {
+      "value": "b12032",
+      "provenance": "observed"
+    },
+    "llama_cpp_version": {
+      "value": "0.8.0-dev (build 12032, commit dde879bc4)",
+      "provenance": "observed"
+    },
+    "launch_flags": {
+      "value": "llama-server -m /workspace/portfolio/runtime/models/Qwen3-1.7B-Q4_K_M.gguf --alias Qwen3-1.7B-Q4_K_M --host 127.0.0.1 --port 8080 -c 4096 -np 1 --jinja --cache-ram 0 --seed 0 --reasoning-format none",
+      "provenance": "observed"
+    },
+    "source": "docs/local-models.md"
+  },
+  "note": "n=20 gives a wide Wilson interval; a high schema-valid count shows native is the better format on this probe set, not that tool calls are 100% reliable. Reliability is measured by parse_failures on full M2+/M5 runs. parse_failures counts all prompts (tool-expecting + no-tool)."
+}

@@ -77,7 +77,7 @@ parse-failure counts over M2+ runs).
 
 | Run | Model | Status |
 | --- | --- | --- |
-| M1 tool-calling probe (`native` vs `json`, 20 prompts) | Qwen3-1.7B Q4_K_M, local CPU | smoke-only run 1: native 20/20, json 10/20 → default `native` ([report](evals/results/m1-toolcall-probe-20261106T011244Z.json)); run 2 pending Chad-review fixes |
+| M1 tool-calling probe (`native` vs `json`, 20 prompts) | Qwen3-1.7B Q4_K_M, local CPU | smoke-only: run 1 native 20/20 json 10/20; run 2 (after review fixes, `--reasoning-format none`) native 20/20 json 6/20 → default stays `native` ([run1](evals/results/m1-toolcall-probe-20261106T011244Z.json), [run2](evals/results/m1-toolcall-probe-20261107T011142Z.json)) |
 | Oracle and heuristic baselines | none (no model) | not run |
 | Local live eval, `dev` split (baseline) | Qwen3-1.7B Q4_K_M, local CPU | not run |
 | Fault-injection and ablation runs | Qwen3-1.7B Q4_K_M, local CPU | not run |
