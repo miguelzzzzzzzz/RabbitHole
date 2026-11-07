@@ -1,0 +1,12 @@
+arp doctor
+required RAM: 1819.36 MiB reported buffers + 1024 MiB headroom = 2843.36 MiB
+serve flags (observed): -c 4096 --cache-ram 0 -np 1 --host 127.0.0.1 --port 8080 --alias Qwen3-1.7B-Q4_K_M --jinja --seed 0 --reasoning-format none
+base URL: http://127.0.0.1:8080/v1
+observed pid: 1841259
+model sha256 (observed): b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897
+llama-server --version (observed): 0.8.0-dev (build 12032, commit dde879bc4)
+MemAvailable: 4778.27 MiB; SwapTotal: 0.00 MiB
+[ok] serve_flags: (observed) context 4096, --cache-ram 0, -np 1, --reasoning-format none, prompt cache disabled
+[ok] memory: MemAvailable 4778.27 MiB >= required 2843.36 MiB (buffers 1819.36 + headroom 1024)
+[ok] models: http://127.0.0.1:8080/v1/models lists Qwen3-1.7B-Q4_K_M
+pass
