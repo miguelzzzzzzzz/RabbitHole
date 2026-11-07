@@ -643,6 +643,7 @@ async def test_run_probe_doctor_refuse(monkeypatch: pytest.MonkeyPatch) -> None:
             alias="Qwen3-1.7B-Q4_K_M",
             jinja=True,
             seed=0,
+            reasoning_format="none",
         )
         return DoctorReport(
             ok=False,
@@ -674,3 +675,236 @@ async def test_run_probe_doctor_refuse(monkeypatch: pytest.MonkeyPatch) -> None:
             skip_doctor=False,
             skip_clean_tree=True,
         )
+
+
+def test_score_native_multiple_tool_calls() -> None:
+    prompt = ProbePrompt(id="c1", expect="tool_call", user="x", tool="calculator")
+    response = _response(
+        tool_calls=(
+            _native_call("calculator", {"expression": "1+1"}),
+            _native_call("calculator", {"expression": "2+2"}),
+        )
+    )
+    score = score_native_reply(prompt, response, probe_registry())
+    assert score.schema_valid is False
+    assert score.multiple_tool_calls is True
+    assert score.parse_failure_reason == "multiple_tool_calls"
+
+
+def test_score_native_reasoning_content_is_think_block() -> None:
+    prompt = ProbePrompt(id="c1", expect="tool_call", user="x", tool="calculator")
+    response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content=None,
+            tool_calls=(_native_call("calculator", {"expression": "1+1"}),),
+            reasoning_content="I will use the calculator",
+        ),
+        finish_reason="tool_calls",
+        usage=None,
+        model="m",
+        latency_ms=1.0,
+        raw={},
+    )
+    score = score_native_reply(prompt, response, probe_registry())
+    assert score.schema_valid is False
+    assert score.parse_failure_reason == "think_block_present"
+    assert score.reasoning_content == "I will use the calculator"
+
+
+def test_score_json_reasoning_content_is_think_block() -> None:
+    reg = probe_registry()
+    models = {name: reg.get(name).args_model for name in reg.names}
+    prompt = ProbePrompt(id="c1", expect="tool_call", user="x", tool="calculator")
+    body = {"action": "tool_call", "tool": "calculator", "arguments": {"expression": "1+1"}}
+    response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content=json.dumps(body),
+            reasoning_content="hidden thoughts",
+        ),
+        finish_reason="stop",
+        usage=None,
+        model="m",
+        latency_ms=1.0,
+        raw={},
+    )
+    score = score_json_reply(prompt, response, models)
+    assert score.parse_failure_reason == "think_block_present"
+
+
+def test_runtime_metadata_labels_pinned_without_observation() -> None:
+    from agentic_research.probe import runtime_metadata
+
+    meta = runtime_metadata(ROOT, observed=None)
+    assert meta["source"] == "docs/local-models.md"
+    assert not str(meta["source"]).startswith("/")
+    assert meta["model_gguf_sha256"]["provenance"] == "pinned"
+    assert meta["launch_flags"]["provenance"] == "pinned"
+    assert "--reasoning-format none" in meta["launch_flags"]["value"]
+
+
+def test_score_report_includes_finish_reason_and_usage() -> None:
+    from agentic_research.providers.types import TokenUsage
+
+    prompt = ProbePrompt(id="c1", expect="tool_call", user="x", tool="calculator")
+    response = ChatResponse(
+        message=ChatMessage(
+            role="assistant",
+            content=None,
+            tool_calls=(_native_call("calculator", {"expression": "1+1"}),),
+        ),
+        finish_reason="tool_calls",
+        usage=TokenUsage(prompt_tokens=10, completion_tokens=4, total_tokens=14),
+        model="m",
+        latency_ms=3.0,
+        raw={},
+    )
+    score = score_native_reply(prompt, response, probe_registry())
+    assert score.finish_reason == "tool_calls"
+    assert score.usage == {
+        "prompt_tokens": 10,
+        "completion_tokens": 4,
+        "total_tokens": 14,
+    }
+
+
+@pytest.mark.asyncio
+async def test_run_probe_composed_without_skips(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """MINOR-8: exercise clean-tree + doctor success path with injected fakes."""
+    import subprocess as sp
+
+    from agentic_research import probe as probe_mod
+    from agentic_research.preflight import CheckResult, DoctorReport, ServeFlags
+
+    # temp git repo with the real probe files copied in
+    repo = tmp_path / "repo"
+    repo.mkdir()
+    for rel in ("config/probe.toml", "probes/tool_calls.v1.yaml", "docs/local-models.md"):
+        dest = repo / rel
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        dest.write_bytes((ROOT / rel).read_bytes())
+    sp.run(["git", "init"], cwd=repo, check=True, capture_output=True)
+    sp.run(["git", "add", "-A"], cwd=repo, check=True, capture_output=True)
+    sp.run(
+        ["git", "-c", "user.email=t@t", "-c", "user.name=t", "commit", "-m", "freeze"],
+        cwd=repo,
+        check=True,
+        capture_output=True,
+    )
+
+    flags = ServeFlags(
+        ctx=4096,
+        cache_ram_mib=0,
+        np=1,
+        host="127.0.0.1",
+        port=8080,
+        alias="Qwen3-1.7B-Q4_K_M",
+        jinja=True,
+        seed=0,
+        reasoning_format="none",
+    )
+
+    def fake_doctor() -> DoctorReport:
+        return DoctorReport(
+            ok=True,
+            checks=(
+                CheckResult(
+                    name="serve_flags",
+                    ok=True,
+                    reason="ok",
+                    message="ok",
+                    details={},
+                ),
+            ),
+            warnings=(),
+            required_mib=2843.36,
+            headroom_mib=1024,
+            reported_buffers_mib=1819.36,
+            mem_available_mib=6000.0,
+            swap_total_mib=0.0,
+            base_url="http://127.0.0.1:8080/v1",
+            model_id="Qwen3-1.7B-Q4_K_M",
+            serve_flags=flags,
+            observed=None,
+        )
+
+    monkeypatch.setattr(probe_mod, "run_doctor", fake_doctor)
+    replies = _perfect_replies() + _perfect_json_replies()
+    provider = ScriptedProvider(replies)
+    result = await run_probe(
+        repo_root=repo,
+        provider=provider,
+        skip_doctor=False,
+        skip_clean_tree=False,
+    )
+    assert result.chosen_default == "native"
+    assert result.doctor["ok"] is True
+    assert "skipped" not in result.doctor
+
+
+def test_runtime_metadata_from_observation() -> None:
+    from agentic_research.preflight import ObservedRuntime, parse_cmdline_flags
+    from agentic_research.probe import runtime_metadata
+
+    argv = [
+        "llama-server",
+        "-m",
+        "/tmp/m.gguf",
+        "--alias",
+        "Qwen3-1.7B-Q4_K_M",
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8080",
+        "-c",
+        "4096",
+        "-np",
+        "1",
+        "--jinja",
+        "--cache-ram",
+        "0",
+        "--seed",
+        "0",
+        "--reasoning-format",
+        "none",
+    ]
+    obs = ObservedRuntime(
+        pid=1,
+        cmdline=tuple(argv),
+        flags=parse_cmdline_flags(argv),
+        props=None,
+        model_sha256="b" * 64,
+        llama_version="0.8.0-dev (build 12032, commit dde879bc4)",
+        binary_path="llama-server",
+    )
+    meta = runtime_metadata(ROOT, observed=obs)
+    assert meta["model_gguf_sha256"]["provenance"] == "observed"
+    assert meta["model_gguf_sha256"]["value"] == "b" * 64
+    assert meta["llama_cpp_build"]["value"] == "b12032"
+    assert meta["launch_flags"]["provenance"] == "observed"
+    assert "--reasoning-format none" in meta["launch_flags"]["value"]
+
+
+def test_run_probe_cli_probe_error(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    from agentic_research import probe as probe_mod
+
+    async def bad_run(**kwargs: Any) -> Any:
+        raise ProbeError("boom config")
+
+    monkeypatch.setattr(probe_mod, "run_probe", bad_run)
+    monkeypatch.setattr(probe_mod, "find_repo_root", lambda: ROOT)
+    assert probe_mod.run_probe_cli() == 2
+    assert "boom config" in capsys.readouterr().err
+
+
+def test_format_providers_md_handles_legacy_flat_meta() -> None:
+    from agentic_research.probe import _meta_prov, _meta_value
+
+    assert _meta_value("plain") == "plain"
+    assert _meta_value(None) == ""
+    assert _meta_prov("plain") == "pinned"

@@ -112,7 +112,15 @@ def test_context_default_matches_env_example(env: dict[str, str]) -> None:
 
 @pytest.mark.parametrize(
     "flag",
-    ["--jinja", "--cache-ram 0", "-np 1", '--host "$HOST"', '--port "$PORT"', '-c "$CTX"'],
+    [
+        "--jinja",
+        "--cache-ram 0",
+        "-np 1",
+        '--host "$HOST"',
+        '--port "$PORT"',
+        '-c "$CTX"',
+        "--reasoning-format none",
+    ],
 )
 def test_serve_passes_memory_and_template_flags(flag: str) -> None:
     serve = SCRIPT.read_text("utf-8").split("serve() {", 1)[1].split("\n}\n", 1)[0]

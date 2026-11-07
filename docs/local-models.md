@@ -50,7 +50,7 @@ whose sha256 does not. On the box the runtime lives in
 
 ```
 llama-server -m <GGUF> --alias Qwen3-1.7B-Q4_K_M --host 127.0.0.1 --port 8080 \
-  -c 4096 -np 1 --jinja --cache-ram 0 --seed 0
+  -c 4096 -np 1 --jinja --cache-ram 0 --seed 0 --reasoning-format none
 ```
 
 - `--jinja`: use the model's chat template, needed for native `tools` /
@@ -59,11 +59,14 @@ llama-server -m <GGUF> --alias Qwen3-1.7B-Q4_K_M --host 127.0.0.1 --port 8080 \
 - `--cache-ram 0`: this build enables a RAM prompt cache with an 8192 MiB
   limit by default. The box has no swap, so it is turned off.
 - `-np 1`: one server slot, so one KV cache.
+- `--reasoning-format none`: leave any `<think>` tags in `message.content`
+  so the probe's think-block scoring can see them. The server default
+  (`auto`) may move thoughts into `message.reasoning_content` instead.
 - Thinking: the chat template has thinking on by default. Non-thinking mode
   is requested per call with
   `"chat_template_kwargs": {"enable_thinking": false}` (the M1 probe and
-  live runs do this). A one-message smoke request on 2026-11-02 in that mode
-  returned plain content with no `<think>` block.
+  live runs do this). The provider also captures `reasoning_content` as a
+  backstop and scores a non-empty value as `think_block_present`.
 
 ## Memory
 
@@ -83,10 +86,12 @@ are a second copy. Process RSS also counts the clean page-cache pages of
 the mapped GGUF file, which the kernel can drop. `arp doctor` budgets the
 sum of the four buffers above (1819.36 MiB) plus the `ARP_MIN_FREE_MB`
 headroom (default 1024), not the GGUF size alone, and compares that to
-`MemAvailable`. Swap is reported but never counted. It also refuses if the
-intended serve flags would enable the prompt cache (`--cache-ram` must be 0)
-or set a context other than 4096, and checks that `{ARP_LLM_BASE_URL}/models`
-lists the pinned alias.
+`MemAvailable`. Swap is reported but never counted. It observes the live
+server's launch flags from `/proc/<pid>/cmdline` (process listening on
+`ARP_LLM_BASE_URL`'s port) and cross-checks `/props` when readable,
+refusing if observation fails or if `--cache-ram` is not 0, `-c` is not
+4096, `-np` is not 1, or `--reasoning-format` is not `none`. It also checks
+that `{ARP_LLM_BASE_URL}/models` lists the pinned alias.
 
 ## Box
 

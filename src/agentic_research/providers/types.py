@@ -43,7 +43,13 @@ class ToolCall(BaseModel):
 
 
 class ChatMessage(BaseModel):
-    """One chat message (request or assistant reply)."""
+    """One chat message (request or assistant reply).
+
+    ``reasoning_content`` captures llama.cpp / DeepSeek-style hidden
+    thinking when the server puts thoughts there (``--reasoning-format
+    auto|deepseek``). Empty or absent is fine; a non-empty value is scored
+    as ``think_block_present`` by the probe.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
@@ -52,6 +58,7 @@ class ChatMessage(BaseModel):
     name: str | None = None
     tool_calls: tuple[ToolCall, ...] | None = None
     tool_call_id: str | None = None
+    reasoning_content: str | None = None
 
 
 class TokenUsage(BaseModel):

@@ -29,7 +29,7 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | `calculator` | AST-whitelist arithmetic, bounded, no `eval` | built (M1) |
 | Trace schema v1 | one JSONL file per run: header + run/step/provider_call/tool_call spans, `parse_failures` | built (M1) |
 | Local runtime | Qwen3-1.7B (GGUF Q4_K_M) on CPU behind llama.cpp `llama-server`, pinned by sha256 in [docs/local-models.md](docs/local-models.md) | installed (M1) |
-| `arp doctor` | memory preflight (reported buffers + headroom vs `MemAvailable`), pinned serve-flag check, `/v1/models` | built (M1) |
+| `arp doctor` | memory preflight (reported buffers + headroom vs `MemAvailable`), observed serve-flag check (`/proc` cmdline + `/props`), `/v1/models` | built (M1) |
 | `OpenAICompatibleProvider` | async httpx chat completions with optional `tools`, usage, native `tool_calls` parsing (local server) | built (M1) |
 | JSON-in-text tool protocol | strict parser, `<think>` strip, reason codes, `parse_failures` counter | built (M1) |
 | Tool-calling probe | frozen 20-prompt probe picks native vs json default | built (M1); default `native` |
@@ -46,7 +46,7 @@ pip install -e ".[dev]"
 arp --version
 arp tools schema                  # all built-in tools, OpenAI `tools` format
 arp tools schema --tool calculator
-arp doctor                        # MemAvailable + serve flags + /v1/models
+arp doctor                        # MemAvailable + observed serve flags + /v1/models
 arp probe tool-calls              # frozen native vs json probe (local model)
 ```
 
@@ -70,12 +70,14 @@ Other groups name the milestone that wires them in.
 
 ## Evaluation
 
-Nothing has been run. Numbers appear here only when they come from a
-committed report under `evals/results/`.
+Numbers appear here only when they come from a committed report under
+`evals/results/`. The M1 probe scores show which format wins on this set;
+they are not a claim that tool calls are 100% reliable (that comes from
+parse-failure counts over M2+ runs).
 
 | Run | Model | Status |
 | --- | --- | --- |
-| M1 tool-calling probe (`native` vs `json`, 20 prompts) | Qwen3-1.7B Q4_K_M, local CPU | smoke-only: native 20/20, json 10/20 → default `native` ([report](evals/results/m1-toolcall-probe-20261106T011244Z.json)) |
+| M1 tool-calling probe (`native` vs `json`, 20 prompts) | Qwen3-1.7B Q4_K_M, local CPU | smoke-only run 1: native 20/20, json 10/20 → default `native` ([report](evals/results/m1-toolcall-probe-20261106T011244Z.json)); run 2 pending Chad-review fixes |
 | Oracle and heuristic baselines | none (no model) | not run |
 | Local live eval, `dev` split (baseline) | Qwen3-1.7B Q4_K_M, local CPU | not run |
 | Fault-injection and ablation runs | Qwen3-1.7B Q4_K_M, local CPU | not run |

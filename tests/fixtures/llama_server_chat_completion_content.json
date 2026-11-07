@@ -1,0 +1,22 @@
+{
+  "id": "chatcmpl-recorded-fixture",
+  "object": "chat.completion",
+  "created": 0,
+  "model": "Qwen3-1.7B-Q4_K_M",
+  "system_fingerprint": "b12032-dde879bc4",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": "<think>\n\n</think>\n\nHi."
+      },
+      "finish_reason": "stop"
+    }
+  ],
+  "usage": {
+    "completion_tokens": 3,
+    "prompt_tokens": 18,
+    "total_tokens": 21
+  }
+}

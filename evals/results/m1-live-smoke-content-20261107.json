@@ -1,0 +1,53 @@
+{
+  "label": "smoke-only",
+  "kind": "live_qwen_non_thinking_content_reply",
+  "date": "2026-11-07T09:00:00+08:00",
+  "model": "Qwen3-1.7B-Q4_K_M",
+  "model_gguf_sha256": {
+    "value": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
+    "provenance": "pinned"
+  },
+  "llama_cpp_version": {
+    "value": "0.8.0-dev (build 12032, commit dde879bc4)",
+    "provenance": "pinned"
+  },
+  "launch_flags": {
+    "value": "llama-server -m <GGUF> --alias Qwen3-1.7B-Q4_K_M --host 127.0.0.1 --port 8080 -c 4096 -np 1 --jinja --cache-ram 0 --seed 0 --reasoning-format none",
+    "provenance": "pinned"
+  },
+  "enable_thinking": false,
+  "temperature": 0.0,
+  "seed": 0,
+  "request": {
+    "messages": [
+      {
+        "role": "user",
+        "content": "Say hi in one word."
+      }
+    ],
+    "max_tokens": 16
+  },
+  "response": {
+    "id": "chatcmpl-recorded-fixture",
+    "object": "chat.completion",
+    "created": 0,
+    "model": "Qwen3-1.7B-Q4_K_M",
+    "system_fingerprint": "b12032-dde879bc4",
+    "choices": [
+      {
+        "index": 0,
+        "message": {
+          "role": "assistant",
+          "content": "<think>\n\n</think>\n\nHi."
+        },
+        "finish_reason": "stop"
+      }
+    ],
+    "usage": {
+      "completion_tokens": 3,
+      "prompt_tokens": 18,
+      "total_tokens": 21
+    }
+  },
+  "note": "Scrubbed live smoke from pinned llama-server on 2026-11-07; empty <think> tags left in content under --reasoning-format none."
+}

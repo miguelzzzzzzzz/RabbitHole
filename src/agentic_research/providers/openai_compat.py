@@ -179,6 +179,14 @@ def parse_chat_completion(
         raise ProviderResponseError(
             f"message.content must be a string or null (got {type(content).__name__})"
         )
+    reasoning_content = message_raw.get("reasoning_content")
+    if reasoning_content is not None and not isinstance(reasoning_content, str):
+        raise ProviderResponseError(
+            "message.reasoning_content must be a string or null "
+            f"(got {type(reasoning_content).__name__})"
+        )
+    if isinstance(reasoning_content, str) and reasoning_content == "":
+        reasoning_content = None
     tool_calls = parse_tool_calls(message_raw.get("tool_calls"))
     finish_reason = choice.get("finish_reason")
     if finish_reason is not None and not isinstance(finish_reason, str):
@@ -187,7 +195,12 @@ def parse_chat_completion(
     if not isinstance(model, str) or not model:
         model = fallback_model
     return ChatResponse(
-        message=ChatMessage(role="assistant", content=content, tool_calls=tool_calls),
+        message=ChatMessage(
+            role="assistant",
+            content=content,
+            tool_calls=tool_calls,
+            reasoning_content=reasoning_content,
+        ),
         finish_reason=finish_reason,
         usage=parse_usage(payload.get("usage")),
         model=model,

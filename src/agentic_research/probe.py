@@ -26,15 +26,25 @@ from typing import Any, Final, Literal, Protocol
 import yaml
 from pydantic import Field
 
-from agentic_research.preflight import DoctorReport, run_doctor
+from agentic_research.preflight import (
+    PINNED_GGUF_SHA256,
+    PINNED_LLAMA_BUILD,
+    PINNED_LLAMA_VERSION,
+    DoctorReport,
+    ObservedRuntime,
+    intended_serve_flags,
+    run_doctor,
+)
 from agentic_research.providers.openai_compat import OpenAICompatibleProvider
 from agentic_research.providers.toolcall_json import (
+    REASON_THINK_BLOCK_PRESENT,
     ParsedFinalAnswer,
     ParsedToolCall,
     ParseFailureCounter,
+    _strip_leading_think,
     parse_toolcall_json,
 )
-from agentic_research.providers.types import ChatMessage, ChatRequest, ChatResponse
+from agentic_research.providers.types import ChatMessage, ChatRequest, ChatResponse, TokenUsage
 from agentic_research.tools.base import RetryPolicy, ToolArgs, ToolContext, ToolError, ToolOutput
 from agentic_research.tools.calculator import CalculatorTool
 from agentic_research.tools.registry import ToolRegistry
@@ -345,6 +355,10 @@ class PromptScore:
     arguments: dict[str, Any] | None
     raw_content: str | None
     raw_tool_calls: list[dict[str, Any]] | None
+    finish_reason: str | None = None
+    usage: dict[str, int | None] | None = None
+    reasoning_content: str | None = None
+    multiple_tool_calls: bool = False
 
 
 def _tool_calls_as_dicts(response: ChatResponse) -> list[dict[str, Any]] | None:
@@ -367,16 +381,74 @@ def _tool_calls_as_dicts(response: ChatResponse) -> list[dict[str, Any]] | None:
     return out
 
 
+def _usage_as_dict(usage: TokenUsage | None) -> dict[str, int | None] | None:
+    if usage is None:
+        return None
+    return {
+        "prompt_tokens": usage.prompt_tokens,
+        "completion_tokens": usage.completion_tokens,
+        "total_tokens": usage.total_tokens,
+    }
+
+
+def _think_reason_from_response(response: ChatResponse) -> str | None:
+    """Return ``think_block_present`` when reasoning leaked into the reply.
+
+    Checks ``message.reasoning_content`` (llama.cpp auto/deepseek) first, then
+    a leading non-empty ``<think>`` block in ``content``. Empty think tags in
+    content are ignored here (JSON path strips them during parse).
+    """
+    reasoning = response.message.reasoning_content
+    if isinstance(reasoning, str) and reasoning.strip():
+        return REASON_THINK_BLOCK_PRESENT
+    content = response.message.content
+    if isinstance(content, str) and content:
+        _remainder, _empty, reason, _detail = _strip_leading_think(content)
+        if reason == REASON_THINK_BLOCK_PRESENT:
+            return REASON_THINK_BLOCK_PRESENT
+    return None
+
+
+def _score_base_fields(response: ChatResponse) -> dict[str, Any]:
+    return {
+        "latency_ms": response.latency_ms,
+        "finish_reason": response.finish_reason,
+        "usage": _usage_as_dict(response.usage),
+        "reasoning_content": response.message.reasoning_content,
+    }
+
+
 def score_native_reply(
     prompt: ProbePrompt,
     response: ChatResponse,
     registry: ToolRegistry,
 ) -> PromptScore:
     """Score one native ``tools`` / ``tool_calls`` reply against a prompt."""
-    latency = response.latency_ms
+    base = _score_base_fields(response)
     content = response.message.content
     raw_calls = _tool_calls_as_dicts(response)
     calls = response.message.tool_calls
+    multi = bool(calls is not None and len(calls) > 1)
+
+    think_reason = _think_reason_from_response(response)
+    if think_reason is not None:
+        return PromptScore(
+            prompt_id=prompt.id,
+            expect=prompt.expect,
+            expected_tool=prompt.tool if prompt.expect == "tool_call" else None,
+            structurally_valid=False,
+            correct_tool_name=False,
+            schema_valid_args=False,
+            correct_no_tool=False,
+            schema_valid=False,
+            parse_failure_reason=think_reason,
+            tool_name=None,
+            arguments=None,
+            raw_content=content,
+            raw_tool_calls=raw_calls,
+            multiple_tool_calls=multi,
+            **base,
+        )
 
     if prompt.expect == "no_tool":
         correct = calls is None or len(calls) == 0
@@ -390,11 +462,12 @@ def score_native_reply(
             correct_no_tool=correct,
             schema_valid=False,
             parse_failure_reason=None if correct else "unexpected_tool_call",
-            latency_ms=latency,
             tool_name=None,
             arguments=None,
             raw_content=content,
             raw_tool_calls=raw_calls,
+            multiple_tool_calls=multi,
+            **base,
         )
 
     expected = prompt.tool
@@ -409,14 +482,34 @@ def score_native_reply(
             correct_no_tool=False,
             schema_valid=False,
             parse_failure_reason="missing_tool_call",
-            latency_ms=latency,
             tool_name=None,
             arguments=None,
             raw_content=content,
             raw_tool_calls=raw_calls,
+            multiple_tool_calls=False,
+            **base,
         )
 
-    # Score the first call (probe prompts expect a single tool use).
+    if multi:
+        return PromptScore(
+            prompt_id=prompt.id,
+            expect=prompt.expect,
+            expected_tool=expected,
+            structurally_valid=False,
+            correct_tool_name=False,
+            schema_valid_args=False,
+            correct_no_tool=False,
+            schema_valid=False,
+            parse_failure_reason="multiple_tool_calls",
+            tool_name=calls[0].function.name,
+            arguments=calls[0].function.arguments,
+            raw_content=content,
+            raw_tool_calls=raw_calls,
+            multiple_tool_calls=True,
+            **base,
+        )
+
+    # Score the single call (probe prompts expect one tool use).
     first = calls[0]
     name = first.function.name
     structurally_valid = True
@@ -443,11 +536,12 @@ def score_native_reply(
         correct_no_tool=False,
         schema_valid=schema_valid,
         parse_failure_reason=None if schema_valid else (parse_reason or "invalid_call"),
-        latency_ms=latency,
         tool_name=name,
         arguments=args,
         raw_content=content,
         raw_tool_calls=raw_calls,
+        multiple_tool_calls=False,
+        **base,
     )
 
 
@@ -457,8 +551,28 @@ def score_json_reply(
     tool_models: Mapping[str, type[ToolArgs]],
 ) -> PromptScore:
     """Score one JSON-in-text reply against a prompt."""
-    latency = response.latency_ms
+    base = _score_base_fields(response)
     content = response.message.content or ""
+    # reasoning_content backstop (same as native) before content parse.
+    think_reason = _think_reason_from_response(response)
+    if think_reason is not None:
+        return PromptScore(
+            prompt_id=prompt.id,
+            expect=prompt.expect,
+            expected_tool=prompt.tool if prompt.expect == "tool_call" else None,
+            structurally_valid=False,
+            correct_tool_name=False,
+            schema_valid_args=False,
+            correct_no_tool=False,
+            schema_valid=False,
+            parse_failure_reason=think_reason,
+            tool_name=None,
+            arguments=None,
+            raw_content=content,
+            raw_tool_calls=None,
+            **base,
+        )
+
     failures = ParseFailureCounter()
     result = parse_toolcall_json(content, tool_models, failures=failures)
 
@@ -479,11 +593,11 @@ def score_json_reply(
             correct_no_tool=correct,
             schema_valid=False,
             parse_failure_reason=reason,
-            latency_ms=latency,
             tool_name=None,
             arguments=None,
             raw_content=content,
             raw_tool_calls=None,
+            **base,
         )
 
     expected = prompt.tool
@@ -499,11 +613,11 @@ def score_json_reply(
             correct_no_tool=False,
             schema_valid=False,
             parse_failure_reason=reason,
-            latency_ms=latency,
             tool_name=None,
             arguments=None,
             raw_content=content,
             raw_tool_calls=None,
+            **base,
         )
 
     action = result.action
@@ -522,11 +636,11 @@ def score_json_reply(
         correct_no_tool=False,
         schema_valid=schema_valid,
         parse_failure_reason=None if schema_valid else "wrong_tool",
-        latency_ms=latency,
         tool_name=action.tool,
         arguments=dict(action.arguments),
         raw_content=content,
         raw_tool_calls=None,
+        **base,
     )
 
 
@@ -539,12 +653,18 @@ class FormatResult:
     no_tool_correct: int
     n_no_tool: int
     parse_failures: int
+    parse_failures_tool: int
+    parse_failures_no_tool: int
     wilson_lo: float
     wilson_hi: float
 
     @property
     def raw_count_label(self) -> str:
         return f"{self.schema_valid_count}/{self.n_tool_expecting}"
+
+    @property
+    def n_prompts(self) -> int:
+        return self.n_tool_expecting + self.n_no_tool
 
 
 def summarize_format(
@@ -557,7 +677,9 @@ def summarize_format(
     no_tool_scores = [s for s in scores if s.expect == "no_tool"]
     schema_valid = sum(1 for s in tool_scores if s.schema_valid)
     no_tool_correct = sum(1 for s in no_tool_scores if s.correct_no_tool)
-    parse_failures = sum(1 for s in scores if s.parse_failure_reason is not None)
+    pf_tool = sum(1 for s in tool_scores if s.parse_failure_reason is not None)
+    pf_no_tool = sum(1 for s in no_tool_scores if s.parse_failure_reason is not None)
+    parse_failures = pf_tool + pf_no_tool
     lo, hi = wilson_interval(schema_valid, n_tool_expecting)
     return FormatResult(
         format=format_name,
@@ -567,6 +689,8 @@ def summarize_format(
         no_tool_correct=no_tool_correct,
         n_no_tool=len(no_tool_scores),
         parse_failures=parse_failures,
+        parse_failures_tool=pf_tool,
+        parse_failures_no_tool=pf_no_tool,
         wilson_lo=lo,
         wilson_hi=hi,
     )
@@ -659,6 +783,10 @@ class ProbeRunResult:
                 "no_tool_correct": fr.no_tool_correct,
                 "n_no_tool": fr.n_no_tool,
                 "parse_failures": fr.parse_failures,
+                "parse_failures_scope": "all_prompts",
+                "parse_failures_n_prompts": fr.n_prompts,
+                "parse_failures_tool": fr.parse_failures_tool,
+                "parse_failures_no_tool": fr.parse_failures_no_tool,
                 "scores": [
                     {
                         "prompt_id": s.prompt_id,
@@ -675,6 +803,10 @@ class ProbeRunResult:
                         "arguments": s.arguments,
                         "raw_content": s.raw_content,
                         "raw_tool_calls": s.raw_tool_calls,
+                        "finish_reason": s.finish_reason,
+                        "usage": s.usage,
+                        "reasoning_content": s.reasoning_content,
+                        "multiple_tool_calls": s.multiple_tool_calls,
                     }
                     for s in fr.scores
                 ],
@@ -703,19 +835,44 @@ class ProbeRunResult:
             "doctor": self.doctor,
             "metadata": self.metadata,
             "note": (
-                "n=20 gives a wide Wilson interval; passing the bar shows "
-                "'probably usable', not '90% reliable'. Reliability is measured "
-                "by parse_failures on full M5 runs."
+                "n=20 gives a wide Wilson interval; a high schema-valid count "
+                "shows native is the better format on this probe set, not that "
+                "tool calls are 100% reliable. Reliability is measured by "
+                "parse_failures on full M2+/M5 runs. parse_failures counts all "
+                "prompts (tool-expecting + no-tool)."
             ),
         }
 
 
 def _doctor_as_dict(report: DoctorReport) -> dict[str, Any]:
+    observed_payload: dict[str, Any] | None = None
+    if report.observed is not None:
+        obs = report.observed
+        observed_payload = {
+            "pid": obs.pid,
+            "cmdline": list(obs.cmdline),
+            "model_sha256": obs.model_sha256,
+            "llama_version": obs.llama_version,
+            "observation_error": obs.observation_error,
+            "flags": {
+                "ctx": obs.flags.ctx,
+                "cache_ram_mib": obs.flags.cache_ram_mib,
+                "np": obs.flags.np,
+                "host": obs.flags.host,
+                "port": obs.flags.port,
+                "alias": obs.flags.alias,
+                "jinja": obs.flags.jinja,
+                "seed": obs.flags.seed,
+                "reasoning_format": obs.flags.reasoning_format,
+                "model_path": obs.flags.model_path,
+            },
+        }
     return {
         "ok": report.ok,
         "formatted": report.format(),
         "required_mib": report.required_mib,
         "mem_available_mib": report.mem_available_mib,
+        "observed": observed_payload,
         "checks": [
             {
                 "name": c.name,
@@ -728,19 +885,51 @@ def _doctor_as_dict(report: DoctorReport) -> dict[str, Any]:
     }
 
 
-def runtime_metadata(repo_root: Path) -> dict[str, Any]:
-    """Pins and date for the report (from docs / local runtime, not scraped)."""
+def _meta_field(value: Any, provenance: str) -> dict[str, Any]:
+    return {"value": value, "provenance": provenance}
+
+
+def runtime_metadata(
+    repo_root: Path,
+    observed: ObservedRuntime | None = None,
+) -> dict[str, Any]:
+    """Build report metadata; label each field ``observed`` vs ``pinned``."""
+    _ = repo_root  # kept for API stability; source is always repo-relative
+    intended = intended_serve_flags()
+    pinned_flags = intended.launch_flags_summary()
+
+    if observed is not None and observed.observation_error is None:
+        model_sha = observed.model_sha256 or PINNED_GGUF_SHA256
+        model_prov = "observed" if observed.model_sha256 else "pinned"
+        version = observed.llama_version or PINNED_LLAMA_VERSION
+        version_prov = "observed" if observed.llama_version else "pinned"
+        launch = observed.flags.launch_flags_summary()
+        launch_prov = "observed"
+        build = PINNED_LLAMA_BUILD
+        # Prefer build parsed from observed version string when present.
+        if observed.llama_version and "build " in observed.llama_version:
+            try:
+                build = "b" + observed.llama_version.split("build ", 1)[1].split(",", 1)[0].strip()
+            except (IndexError, ValueError):
+                build = PINNED_LLAMA_BUILD
+        build_prov = "observed" if observed.llama_version else "pinned"
+    else:
+        model_sha = PINNED_GGUF_SHA256
+        model_prov = "pinned"
+        version = PINNED_LLAMA_VERSION
+        version_prov = "pinned"
+        launch = pinned_flags
+        launch_prov = "pinned"
+        build = PINNED_LLAMA_BUILD
+        build_prov = "pinned"
+
     return {
         "date": datetime.now(UTC).astimezone().isoformat(timespec="seconds"),
-        "model_gguf_sha256": "b139949c5bd74937ad8ed8c8cf3d9ffb1e99c866c823204dc42c0d91fa181897",
-        "llama_cpp_build": "b12032",
-        "llama_cpp_version": "0.8.0-dev (build 12032, commit dde879bc4)",
-        "launch_flags": (
-            "llama-server -m <GGUF> --alias Qwen3-1.7B-Q4_K_M "
-            "--host 127.0.0.1 --port 8080 -c 4096 -np 1 --jinja "
-            "--cache-ram 0 --seed 0"
-        ),
-        "source": str(repo_root / "docs" / "local-models.md"),
+        "model_gguf_sha256": _meta_field(model_sha, model_prov),
+        "llama_cpp_build": _meta_field(build, build_prov),
+        "llama_cpp_version": _meta_field(version, version_prov),
+        "launch_flags": _meta_field(launch, launch_prov),
+        "source": "docs/local-models.md",
     }
 
 
@@ -770,6 +959,7 @@ async def run_probe(
         )
 
     doctor_payload: dict[str, Any]
+    observed: ObservedRuntime | None = None
     if skip_doctor:
         doctor_payload = {"ok": True, "skipped": True, "checks": []}
     else:
@@ -777,6 +967,7 @@ async def run_probe(
         if not report.ok:
             raise ProbeRefuseError(f"arp doctor failed; refusing probe:\n{report.format()}")
         doctor_payload = _doctor_as_dict(report)
+        observed = report.observed
 
     registry = probe_registry()
     owns_provider = provider is None
@@ -821,7 +1012,7 @@ async def run_probe(
         chosen_default=chosen,
         formats=formats,
         doctor=doctor_payload,
-        metadata=runtime_metadata(root),
+        metadata=runtime_metadata(root, observed=observed),
         label=cfg.label,
     )
 
@@ -834,6 +1025,23 @@ def write_report(result: ProbeRunResult, repo_root: Path, path: Path | None = No
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(result.to_report(), indent=2, ensure_ascii=False) + "\n")
     return path
+
+
+def _meta_value(field: Any) -> str:
+    if isinstance(field, dict) and "value" in field:
+        value = field["value"]
+        return "" if value is None else str(value)
+    if field is None:
+        return ""
+    return str(field)
+
+
+def _meta_prov(field: Any) -> str:
+    if isinstance(field, dict):
+        prov = field.get("provenance")
+        if isinstance(prov, str):
+            return prov
+    return "pinned"
 
 
 def format_providers_md(result: ProbeRunResult) -> str:
@@ -864,9 +1072,12 @@ def format_providers_md(result: ProbeRunResult) -> str:
         "| --- | --- |",
         f"| Date | {meta.get('date', '')} |",
         f"| Model | {result.config.model} |",
-        f"| Model GGUF sha256 | `{meta.get('model_gguf_sha256', '')}` |",
-        f"| llama.cpp | {meta.get('llama_cpp_version', '')} |",
-        f"| Launch flags | `{meta.get('launch_flags', '')}` |",
+        f"| Model GGUF sha256 | `{_meta_value(meta.get('model_gguf_sha256'))}` "
+        f"({_meta_prov(meta.get('model_gguf_sha256'))}) |",
+        f"| llama.cpp | {_meta_value(meta.get('llama_cpp_version'))} "
+        f"({_meta_prov(meta.get('llama_cpp_version'))}) |",
+        f"| Launch flags | `{_meta_value(meta.get('launch_flags'))}` "
+        f"({_meta_prov(meta.get('launch_flags'))}) |",
         f"| Temperature | {result.config.temperature} |",
         f"| Seed | {result.config.seed} |",
         f"| Thinking | enable_thinking={result.config.enable_thinking} |",
@@ -876,22 +1087,33 @@ def format_providers_md(result: ProbeRunResult) -> str:
         f"| Rule version | {result.config.rule_version} |",
         f"| Label | `{result.label}` |",
         "",
-        "| Format | Schema-valid | 95% Wilson | No-tool correct | Parse failures |",
+        "| Format | Schema-valid | 95% Wilson | No-tool correct | Parse failures (25 prompts) |",
         "| --- | --- | --- | --- | --- |",
         (
             f"| native | {native.raw_count_label} | "
             f"[{native.wilson_lo:.3f}, {native.wilson_hi:.3f}] | "
-            f"{native.no_tool_correct}/{native.n_no_tool} | {native.parse_failures} |"
+            f"{native.no_tool_correct}/{native.n_no_tool} | "
+            f"{native.parse_failures} "
+            f"(tool {native.parse_failures_tool} / no-tool {native.parse_failures_no_tool}) |"
         ),
         (
             f"| json | {json_fmt.raw_count_label} | "
             f"[{json_fmt.wilson_lo:.3f}, {json_fmt.wilson_hi:.3f}] | "
-            f"{json_fmt.no_tool_correct}/{json_fmt.n_no_tool} | {json_fmt.parse_failures} |"
+            f"{json_fmt.no_tool_correct}/{json_fmt.n_no_tool} | "
+            f"{json_fmt.parse_failures} "
+            f"(tool {json_fmt.parse_failures_tool} / no-tool {json_fmt.parse_failures_no_tool}) |"
         ),
         "",
         "Note: with n=20 the Wilson interval is wide (18/20 ≈ [0.70, 0.97]).",
-        'Passing the bar means "probably usable", not "90% reliable".',
-        "Reliability is measured by `parse_failures` on full M5 runs.",
+        "A high schema-valid count shows native is the better format on this",
+        'probe set, not that tool calls are "100% reliable". Reliability comes',
+        "from parse-failure counts over M2+ runs.",
+        "",
+        "JSON-in-text note: the M1 json system prompt appends the native",
+        '"answer directly" instruction after the JSON-only protocol, which',
+        "contradicts itself on no-tool prompts. The json score measures this",
+        "prompt, not JSON-in-text in the abstract. Fix in `tool_calls.v2` /",
+        "`rule_version` 2 before the M6 ablation reuses it (no v2 at M1).",
         "",
         "## Memory preflight",
         "",

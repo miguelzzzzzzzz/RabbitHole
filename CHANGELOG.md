@@ -5,7 +5,17 @@ All notable changes to this project are documented here. The format follows
 
 ## [Unreleased]
 
+### Fixed
+- Chad M1 review MAJOR-1: `arp doctor` observes live `llama-server` flags via `/proc/<pid>/cmdline` + `/props`; refuses if unreadable or `--cache-ram`/`-c`/`-np`/`--reasoning-format` mismatch. `runtime_metadata` fields labelled `observed` vs `pinned`; `metadata.source` repo-relative.
+- Chad M1 review MAJOR-2: pin `--reasoning-format none` in `local_runtime.sh`/docs/doctor; capture `reasoning_content` on `ChatMessage` and score non-empty as `think_block_present` (native + json) with MockTransport + recorded fixtures.
+
+### Changed
+- Probe scores include `finish_reason`, `usage`, `reasoning_content`, `multiple_tool_calls`; `parse_failures` labelled for all 25 prompts (tool/no-tool split).
+- Docs (Bogart): 20/20 means native wins on this probe set, not "100% reliable"; reliability = parse-failure counts over M2+. JSON prompt contradiction noted (no v2 at M1).
+- Coverage: ~96.4% after observation/probe growth (floor 96%); CHANGELOG notes the drop. Composed `run_probe` tested without skips.
+
 ### Added
+- Scrubbed llama-server fixtures under `tests/fixtures/` (MINOR-7); live smoke-only JSON under `evals/results/` (MINOR-6).
 - Live M1 tool-calling probe results (`smoke-only`): native 20/20 (Wilson 95% ≈ [0.84, 1.00]), json 10/20 (≈ [0.30, 0.70]); chosen default `native` under the pre-registered rule. Report at `evals/results/m1-toolcall-probe-20261106T011244Z.json`; `docs/providers.md` updated; `ARP_TOOL_FORMAT=native`.
 - `arp probe tool-calls` (`agentic_research.probe`): loads the frozen `config/probe.toml` + `probes/tool_calls.v1.yaml`, refuses a dirty tree or probe-file sha256 mismatch (no request sent), runs `native` and `json` formats against a local `OpenAICompatibleProvider` (temperature 0, seed 0, `enable_thinking=false`), scores structurally valid / correct tool / schema-valid args / no-tool decisions, applies the pre-registered 18/20 decision rule, writes a `smoke-only` report under `evals/results/m1-toolcall-probe-*.json`, and updates `docs/providers.md`. Includes a stub `search_corpus` schema for the probe, Wilson 95% helper, and offline unit tests with a scripted provider. Live run is separate.
 - Frozen M1 tool-calling probe bar: `probes/tool_calls.v1.yaml` (exactly 20 tool-expecting prompts over `calculator` + stub `search_corpus`, plus 5 no-tool prompts scored separately) and `config/probe.toml` (`probe_sha256`, `min_valid = 18`, `n = 20`, `rule_version = 1`, temperature 0, seed 0, `enable_thinking = false`). CI asserts the count and that the on-disk sha256 matches the config. No probe run yet; `arp probe tool-calls` lands next.

@@ -82,10 +82,14 @@ serve() {
   verify
   # --cache-ram 0: the default prompt cache may grow to 8 GiB of RAM; the box
   # has about 3 GB to spare and no swap. -np 1: one slot, one KV cache.
+  # --reasoning-format none: keep <think> in message.content so the probe
+  # can score think_block_present (default auto may move thoughts to
+  # reasoning_content instead).
   exec "${LLAMA_DIR}/llama-server" \
     -m "$GGUF_PATH" --alias "$MODEL_ALIAS" \
     --host "$HOST" --port "$PORT" \
-    -c "$CTX" -np 1 --jinja --cache-ram 0 --seed 0
+    -c "$CTX" -np 1 --jinja --cache-ram 0 --seed 0 \
+    --reasoning-format none
 }
 
 case "${1:-}" in

@@ -1,0 +1,33 @@
+{
+  "id": "chatcmpl-recorded-tool",
+  "object": "chat.completion",
+  "created": 0,
+  "model": "Qwen3-1.7B-Q4_K_M",
+  "system_fingerprint": "b12032-dde879bc4",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "reasoning_content": "I should use the calculator.",
+        "tool_calls": [
+          {
+            "id": "call_recorded_1",
+            "type": "function",
+            "function": {
+              "name": "calculator",
+              "arguments": "{\"expression\":\"1+1\"}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 40,
+    "completion_tokens": 12,
+    "total_tokens": 52
+  }
+}

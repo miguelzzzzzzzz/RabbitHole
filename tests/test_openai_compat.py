@@ -806,3 +806,74 @@ async def test_live_qwen_non_thinking_content_reply(live_server: str) -> None:
     assert "<think>" not in response.message.content
     assert response.model
     assert response.latency_ms > 0.0
+
+
+# --- recorded llama-server fixtures (MINOR-7) + reasoning_content (MAJOR-2) ---
+
+
+FIXTURES = Path(__file__).resolve().parent / "fixtures"
+
+
+def test_recorded_llama_server_content_fixture_parses() -> None:
+    payload = json.loads(
+        (FIXTURES / "llama_server_chat_completion_content.json").read_text(encoding="utf-8")
+    )
+    response = parse_chat_completion(payload, latency_ms=1.0, fallback_model=DEFAULT_MODEL)
+    assert response.model == DEFAULT_MODEL
+    assert response.finish_reason == "stop"
+    assert response.message.content is not None
+    assert response.usage is not None
+    assert response.usage.total_tokens == 21
+
+
+@pytest.mark.asyncio
+async def test_recorded_llama_server_tool_reasoning_fixture_via_mock() -> None:
+    payload = json.loads(
+        (FIXTURES / "llama_server_chat_completion_tool_reasoning.json").read_text(encoding="utf-8")
+    )
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=payload)
+
+    provider = _mock_provider(handler)
+    response = await provider.complete(
+        ChatRequest(messages=(ChatMessage(role="user", content="1+1"),))
+    )
+    await provider.aclose()
+    assert response.message.reasoning_content == "I should use the calculator."
+    assert response.message.tool_calls is not None
+    assert response.message.tool_calls[0].function.name == "calculator"
+    assert response.finish_reason == "tool_calls"
+
+
+@pytest.mark.asyncio
+async def test_mock_transport_reasoning_content_shaped_like_llama_cpp() -> None:
+    body = {
+        "id": "chatcmpl-x",
+        "object": "chat.completion",
+        "model": DEFAULT_MODEL,
+        "choices": [
+            {
+                "index": 0,
+                "finish_reason": "tool_calls",
+                "message": {
+                    "role": "assistant",
+                    "content": None,
+                    "reasoning_content": "need calculator",
+                    "tool_calls": [_tool_call()],
+                },
+            }
+        ],
+        "usage": {"prompt_tokens": 5, "completion_tokens": 3, "total_tokens": 8},
+    }
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json=body)
+
+    provider = _mock_provider(handler)
+    response = await provider.complete(
+        ChatRequest(messages=(ChatMessage(role="user", content="add"),))
+    )
+    await provider.aclose()
+    assert response.message.reasoning_content == "need calculator"
+    assert response.message.tool_calls is not None

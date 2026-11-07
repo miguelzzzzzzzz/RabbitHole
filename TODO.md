@@ -38,7 +38,10 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] Freeze commit: `probes/tool_calls.v1.yaml` (20 tool-expecting prompts) + `config/probe.toml` (`probe_sha256`, `min_valid = 18`, `n = 20`) before any probe run (2026-11-06)
 - [x] `arp probe tool-calls` implemented (native vs json; refuses dirty tree / hash mismatch; Wilson CI; decision rule; smoke-only report) (2026-11-06)
 - [x] Live `arp probe tool-calls` on the box (2026-11-06): native 20/20, json 10/20, chosen default `native`; report + docs/providers.md + ARP_TOOL_FORMAT=native committed
-- [ ] Chad's M1 review (ask after this cycle)
+- [ ] Chad's M1 re-review after MAJOR/MINOR remediation (tip after this cycle)
+- [x] Chad M1 FAIL remediation: observe doctor flags, `--reasoning-format none` + `reasoning_content`, MINOR-1..8 (OPT-2 deferred)
+- [ ] M5: wire `ARP_TOOL_FORMAT` from env into the agent loop (OPT-3; currently only in `.env.example`)
+- [ ] Before M6 native-vs-JSON ablation: `tool_calls.v2` / `rule_version` 2 to fix contradictory json system prompt (MINOR-1)
 
 ## Eval hygiene (from CitationNeeded M4 review; wire into M4/M6)
 - [ ] Equal depth / like-for-like: same search `k`, budgets, and scoring cut across compared modes; test where one doc owns several top chunks; per-task `n_retrieved < k`
