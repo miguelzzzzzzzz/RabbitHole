@@ -6,6 +6,7 @@ All notable changes to this project are documented here. The format follows
 ## [Unreleased]
 
 ### Fixed
+- Chad M1 re-check R-3: the shared probe think check now also returns `think_block_unclosed` for a leading `<think>` with no `</think>`, so a native reply with an unclosed think fails even when its `tool_calls` are valid (the JSON path already rejected it in the parser). Added scorer tests for a non-empty or unclosed think in `content` on both formats and both prompt kinds, plus empty-think and late-think controls. Re-scoring the `raw_content` of both committed M1 probe reports finds no leading non-empty or unclosed think, so neither report's results change; `rule_version` stays 1.
 - Chad M1 review MAJOR-1: `arp doctor` observes live `llama-server` flags via `/proc/<pid>/cmdline` + `/props`; refuses if unreadable or `--cache-ram`/`-c`/`-np`/`--reasoning-format` mismatch. `runtime_metadata` fields labelled `observed` vs `pinned`; `metadata.source` repo-relative.
 - Chad M1 review MAJOR-2: pin `--reasoning-format none` in `local_runtime.sh`/docs/doctor; capture `reasoning_content` on `ChatMessage` and score non-empty as `think_block_present` (native + json) with MockTransport + recorded fixtures.
 

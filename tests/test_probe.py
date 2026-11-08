@@ -733,6 +733,103 @@ def test_score_json_reasoning_content_is_think_block() -> None:
     assert score.parse_failure_reason == "think_block_present"
 
 
+# R-3: with --reasoning-format none the think block arrives in ``content``.
+_THINK_PREFIXES_FAIL = [
+    pytest.param(
+        "<think>I should use the calculator.</think>\n", "think_block_present", id="present"
+    ),
+    pytest.param("  <think>\nreasoning\n</think>\n\n", "think_block_present", id="present-ws"),
+    pytest.param("<think>I should use the calculator.", "think_block_unclosed", id="unclosed"),
+    pytest.param("<think>\n\n", "think_block_unclosed", id="unclosed-empty"),
+]
+
+
+@pytest.mark.parametrize(("prefix", "reason"), _THINK_PREFIXES_FAIL)
+def test_score_native_content_think_fails_despite_valid_tool_call(prefix: str, reason: str) -> None:
+    prompt = ProbePrompt(id="c1", expect="tool_call", user="x", tool="calculator")
+    response = _response(
+        content=prefix,
+        tool_calls=(_native_call("calculator", {"expression": "1+1"}),),
+    )
+    score = score_native_reply(prompt, response, probe_registry())
+    assert score.parse_failure_reason == reason
+    assert score.schema_valid is False
+    assert score.structurally_valid is False
+    assert score.tool_name is None
+    assert score.raw_content == prefix
+    assert score.raw_tool_calls is not None
+
+
+@pytest.mark.parametrize(("prefix", "reason"), _THINK_PREFIXES_FAIL)
+def test_score_native_content_think_fails_no_tool_prompt(prefix: str, reason: str) -> None:
+    prompt = ProbePrompt(id="n1", expect="no_tool", user="hi")
+    score = score_native_reply(prompt, _response(content=prefix + "Hello."), probe_registry())
+    assert score.parse_failure_reason == reason
+    assert score.correct_no_tool is False
+
+
+@pytest.mark.parametrize(("prefix", "reason"), _THINK_PREFIXES_FAIL)
+def test_score_json_content_think_fails_despite_valid_body(prefix: str, reason: str) -> None:
+    reg = probe_registry()
+    models = {name: reg.get(name).args_model for name in reg.names}
+    prompt = ProbePrompt(id="c1", expect="tool_call", user="x", tool="calculator")
+    body = {"action": "tool_call", "tool": "calculator", "arguments": {"expression": "1+1"}}
+    content = prefix + json.dumps(body)
+    score = score_json_reply(prompt, _response(content=content), models)
+    assert score.parse_failure_reason == reason
+    assert score.schema_valid is False
+    assert score.tool_name is None
+
+    no_tool = ProbePrompt(id="n1", expect="no_tool", user="hi")
+    final = prefix + json.dumps({"action": "final_answer", "answer": "ready"})
+    no_tool_score = score_json_reply(no_tool, _response(content=final), models)
+    assert no_tool_score.parse_failure_reason == reason
+    assert no_tool_score.correct_no_tool is False
+
+
+@pytest.mark.parametrize(
+    "prefix", ["<think></think>", "<think>\n\n</think>\n\n", "  <think> </think>"]
+)
+def test_score_empty_content_think_is_not_a_failure(prefix: str) -> None:
+    """Control: Qwen3 non-thinking mode emits an empty think block; it must still pass."""
+    reg = probe_registry()
+    prompt = ProbePrompt(id="c1", expect="tool_call", user="x", tool="calculator")
+    native = score_native_reply(
+        prompt,
+        _response(content=prefix, tool_calls=(_native_call("calculator", {"expression": "1+1"}),)),
+        reg,
+    )
+    assert native.schema_valid is True
+    assert native.parse_failure_reason is None
+
+    models = {name: reg.get(name).args_model for name in reg.names}
+    body = {"action": "tool_call", "tool": "calculator", "arguments": {"expression": "1+1"}}
+    js = score_json_reply(prompt, _response(content=prefix + "\n" + json.dumps(body)), models)
+    assert js.schema_valid is True
+    assert js.parse_failure_reason is None
+
+
+def test_score_think_not_leading_is_left_to_format_rules() -> None:
+    """A ``<think>`` after other text is not a leading think block.
+
+    Native: prose content alongside a valid call is not a parse failure.
+    JSON: the strict parser rejects the leading prose instead.
+    """
+    reg = probe_registry()
+    prompt = ProbePrompt(id="c1", expect="tool_call", user="x", tool="calculator")
+    content = "Sure. <think>late</think>"
+    native = score_native_reply(
+        prompt,
+        _response(content=content, tool_calls=(_native_call("calculator", {"expression": "1+1"}),)),
+        reg,
+    )
+    assert native.schema_valid is True
+    models = {name: reg.get(name).args_model for name in reg.names}
+    js = score_json_reply(prompt, _response(content=content), models)
+    assert js.schema_valid is False
+    assert js.parse_failure_reason == "leading_content"
+
+
 def test_runtime_metadata_labels_pinned_without_observation() -> None:
     from agentic_research.probe import runtime_metadata
 

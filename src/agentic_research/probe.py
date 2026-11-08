@@ -392,11 +392,14 @@ def _usage_as_dict(usage: TokenUsage | None) -> dict[str, int | None] | None:
 
 
 def _think_reason_from_response(response: ChatResponse) -> str | None:
-    """Return ``think_block_present`` when reasoning leaked into the reply.
+    """Return a think-block failure reason when reasoning leaked into the reply.
 
     Checks ``message.reasoning_content`` (llama.cpp auto/deepseek) first, then
-    a leading non-empty ``<think>`` block in ``content``. Empty think tags in
-    content are ignored here (JSON path strips them during parse).
+    a leading ``<think>`` in ``content``: a non-empty body is
+    ``think_block_present`` and a missing ``</think>`` is
+    ``think_block_unclosed``. Both fail the reply in either format, even when
+    native ``tool_calls`` are otherwise valid. Empty think tags in content are
+    not a failure (the JSON path strips them during parse).
     """
     reasoning = response.message.reasoning_content
     if isinstance(reasoning, str) and reasoning.strip():
@@ -404,8 +407,7 @@ def _think_reason_from_response(response: ChatResponse) -> str | None:
     content = response.message.content
     if isinstance(content, str) and content:
         _remainder, _empty, reason, _detail = _strip_leading_think(content)
-        if reason == REASON_THINK_BLOCK_PRESENT:
-            return REASON_THINK_BLOCK_PRESENT
+        return reason
     return None
 
 

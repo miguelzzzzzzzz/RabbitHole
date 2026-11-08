@@ -43,7 +43,7 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [ ] OPT-2 (deferred, accepted by Chad): typed pydantic `ProbeReport` schema (owner: Kim)
 
 ## M1 follow-ups from Chad's re-check (non-blocking MINORs; R-8 withdrawn)
-- [ ] R-3 (priority, early M2; owner: Kim): tests for a non-empty `<think>` in content in both scorers (native must fail even with valid `tool_calls`); return `think_block_unclosed` from the shared think check and test it on the native path
+- [x] R-3 (priority, early M2; owner: Kim; done 2026-11-08): tests for a non-empty `<think>` in content in both scorers (native must fail even with valid `tool_calls`); return `think_block_unclosed` from the shared think check and test it on the native path
 - [ ] R-1 (owner: Kim): `/props` only fills gaps; either compare `n_ctx`/`total_slots` against the cmdline and refuse on mismatch, or say "fills from `/props`" in docs/CHANGELOG; delete the dead `reasoning_format` branch
 - [ ] R-2 (owner: Kim): doctor refuses when the observed GGUF sha256 or `llama-server --version` differs from the pins, or when hashing failed; tests for both
 - [ ] R-4 (owner: Kim): one test composing `observe_runtime(proc_root=fake)` (fake `net/tcp`, `fd/` symlinks, `cmdline`) through `run_doctor` and `runtime_metadata`, asserting `observed` provenance
@@ -54,7 +54,7 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [ ] OPT-1 (optional; owner: Kim): replace the always-skipping `test_live_probe_marker_exists_for_manual_runs`
 
 ## M2 - Agent loop, run state, budgets, timeouts/retries, scripted provider (in progress)
-- [ ] R-3 first (see above)
+- [x] R-3 first (see above; 2026-11-08)
 - [ ] `RunState` + `Action` union (`ToolCall | FinalAnswer | GiveUp`) + `Policy` protocol
 - [ ] `ToolExecutor`: per-call timeout, seeded backoff retries for `transient`/`timeout` only, injectable clock/sleeper
 - [ ] Loop with budgets (steps, tool calls total/per tool, deadline, tokens, repair attempts), loop detection, observation shaping
