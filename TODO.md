@@ -21,7 +21,7 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [ ] Hosted backend optional only; hosted rows "not run" in reports and README
 - [ ] If Cline returns: add hosted runs as a separately labelled extra (revisit ADR-0009)
 
-## M1 - Scaffold, tool contracts, registry, calculator, trace schema, local runtime and tool-calling probe (in progress)
+## M1 - Scaffold, tool contracts, registry, calculator, trace schema, local runtime and tool-calling probe (done 2026-11-08)
 - [x] Packaging (src layout, `agentic_research`, `arp` entry point), ruff, mypy --strict (src and tests), pytest, 96% branch-coverage floor, autouse network guard (2026-10-30)
 - [x] CI workflow (py3.11 + py3.13; lint, format check, mypy, `pytest -m "not slow"` with coverage) (2026-10-30)
 - [x] `Tool` protocol, `ToolContext`, `RetryPolicy`, `ToolResult`/`ToolError` + error-class enum (2026-10-30)
@@ -38,8 +38,29 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] Freeze commit: `probes/tool_calls.v1.yaml` (20 tool-expecting prompts) + `config/probe.toml` (`probe_sha256`, `min_valid = 18`, `n = 20`) before any probe run (2026-11-06)
 - [x] `arp probe tool-calls` implemented (native vs json; refuses dirty tree / hash mismatch; Wilson CI; decision rule; smoke-only report) (2026-11-06)
 - [x] Live `arp probe tool-calls` on the box (2026-11-06): native 20/20, json 10/20, chosen default `native`; report + docs/providers.md + ARP_TOOL_FORMAT=native committed
-- [ ] Chad's M1 re-review after MAJOR/MINOR remediation (tip after this cycle)
+- [x] Chad's M1 re-check at `60e7ad9`: PASS (0 CRITICAL, 0 MAJOR); M1 may close and M2 start with the MINORs below tracked (2026-11-07)
 - [x] Chad M1 FAIL remediation: observe doctor flags, `--reasoning-format none` + `reasoning_content`, MINOR-1..8 (OPT-2 deferred)
+- [ ] OPT-2 (deferred, accepted by Chad): typed pydantic `ProbeReport` schema (owner: Kim)
+
+## M1 follow-ups from Chad's re-check (non-blocking MINORs; R-8 withdrawn)
+- [ ] R-3 (priority, early M2; owner: Kim): tests for a non-empty `<think>` in content in both scorers (native must fail even with valid `tool_calls`); return `think_block_unclosed` from the shared think check and test it on the native path
+- [ ] R-1 (owner: Kim): `/props` only fills gaps; either compare `n_ctx`/`total_slots` against the cmdline and refuse on mismatch, or say "fills from `/props`" in docs/CHANGELOG; delete the dead `reasoning_format` branch
+- [ ] R-2 (owner: Kim): doctor refuses when the observed GGUF sha256 or `llama-server --version` differs from the pins, or when hashing failed; tests for both
+- [ ] R-4 (owner: Kim): one test composing `observe_runtime(proc_root=fake)` (fake `net/tcp`, `fd/` symlinks, `cmdline`) through `run_doctor` and `runtime_metadata`, asserting `observed` provenance
+- [ ] R-5 (owner: Kim): render box-local paths in reports/docs as `$ARP_RUNTIME_DIR/...` or basename + sha256; keep raw cmdline only if labelled box-local
+- [ ] R-6 (owner: Kim): produce the live smoke artifact from code (real timestamp, observed metadata) or relabel it as a hand-scrubbed transcription
+- [ ] R-7 (owner: Kim): document the capture configuration and scrubbing of `llama_server_chat_completion_tool_reasoning.json`, or label it synthetic
+- [ ] R-9 (owner: Kim): one sentence in `docs/providers.md`: JSON moved 10 to 6 between runs with different `--reasoning-format` settings; no causal claim from two runs
+- [ ] OPT-1 (optional; owner: Kim): replace the always-skipping `test_live_probe_marker_exists_for_manual_runs`
+
+## M2 - Agent loop, run state, budgets, timeouts/retries, scripted provider (in progress)
+- [ ] R-3 first (see above)
+- [ ] `RunState` + `Action` union (`ToolCall | FinalAnswer | GiveUp`) + `Policy` protocol
+- [ ] `ToolExecutor`: per-call timeout, seeded backoff retries for `transient`/`timeout` only, injectable clock/sleeper
+- [ ] Loop with budgets (steps, tool calls total/per tool, deadline, tokens, repair attempts), loop detection, observation shaping
+- [ ] `ScriptedProvider`, `LLMPolicy` skeleton, `OraclePolicy`; tracer on every span; `arp run --provider scripted` and `arp trace show`
+
+## Later (from M1)
 - [ ] M5: wire `ARP_TOOL_FORMAT` from env into the agent loop (OPT-3; currently only in `.env.example`)
 - [ ] Before M6 native-vs-JSON ablation: `tool_calls.v2` / `rule_version` 2 to fix contradictory json system prompt (MINOR-1)
 

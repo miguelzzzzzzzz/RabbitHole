@@ -8,7 +8,7 @@ versioned JSONL traces, and programmatic trajectory evals. The default policy
 model is a small local model (Qwen3-1.7B, quantized, on CPU); CI never calls a
 model.
 
-**Status:** M1 in progress. Built so far: package scaffold and CI, typed
+**Status:** M1 done (2026-11-08); M2 (agent loop) in progress. Built so far: package scaffold and CI, typed
 tool contracts and a validating tool registry, the `calculator` tool, trace
 schema v1 (JSONL), `arp tools schema`, a pinned local model runtime
 (llama.cpp `llama-server` + Qwen3-1.7B Q4_K_M), `arp doctor` (memory
