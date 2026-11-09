@@ -11,12 +11,14 @@ All notable changes to this project are documented here. The format follows
 - Chad M1 review MAJOR-2: pin `--reasoning-format none` in `local_runtime.sh`/docs/doctor; capture `reasoning_content` on `ChatMessage` and score non-empty as `think_block_present` (native + json) with MockTransport + recorded fixtures.
 
 ### Changed
+- R-9: `docs/providers.md` says JSON moved 10/20 to 6/20 between runs with different `--reasoning-format` settings and that no causal claim follows from two runs.
 - M1 closed (2026-11-08) after Chad's re-check passed at `60e7ad9` (0 CRITICAL, 0 MAJOR); M2 started. His non-blocking follow-ups R-1..R-7, R-9 and OPT-1/OPT-2 are tracked in `TODO.md` with owners (R-8 withdrawn).
 - Probe scores include `finish_reason`, `usage`, `reasoning_content`, `multiple_tool_calls`; `parse_failures` labelled for all 25 prompts (tool/no-tool split).
 - Docs (Bogart): 20/20 means native wins on this probe set, not "100% reliable"; reliability = parse-failure counts over M2+. JSON prompt contradiction noted (no v2 at M1).
 - Coverage: ~96.4% after observation/probe growth (floor 96%); CHANGELOG notes the drop. Composed `run_probe` tested without skips.
 
 ### Added
+- M2: `agentic_research.agent` with the `Action` union (`ToolCall | FinalAnswer | GiveUp`, tagged on `kind`), the `Policy` protocol, serializable `RunState` (task, plan, messages, evidence, step records, budget counters, terminal status with `budget_exhausted:<kind>` / `failed:<reason>` labels, JSON round-trip) and `Budgets` (steps, tool calls total and per tool, deadline, tokens, repairs) with a fixed-order `exhausted()` check. No loop yet; the loop and executor come next.
 - Scrubbed llama-server fixtures under `tests/fixtures/` (MINOR-7); live smoke-only JSON under `evals/results/` (MINOR-6).
 - Second M1 tool-call probe run (`evals/results/m1-toolcall-probe-20261107T011142Z.json`): native 20/20, json 6/20, default stays `native` under the frozen rule; first run kept. Observed launch flags include `--reasoning-format none`.
 - Live M1 tool-calling probe results (`smoke-only`): native 20/20 (Wilson 95% ≈ [0.84, 1.00]), json 10/20 (≈ [0.30, 0.70]); chosen default `native` under the pre-registered rule. Report at `evals/results/m1-toolcall-probe-20261106T011244Z.json`; `docs/providers.md` updated; `ARP_TOOL_FORMAT=native`.
