@@ -50,12 +50,12 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [ ] R-5 (owner: Kim): render box-local paths in reports/docs as `$ARP_RUNTIME_DIR/...` or basename + sha256; keep raw cmdline only if labelled box-local
 - [ ] R-6 (owner: Kim): produce the live smoke artifact from code (real timestamp, observed metadata) or relabel it as a hand-scrubbed transcription
 - [ ] R-7 (owner: Kim): document the capture configuration and scrubbing of `llama_server_chat_completion_tool_reasoning.json`, or label it synthetic
-- [ ] R-9 (owner: Kim): one sentence in `docs/providers.md`: JSON moved 10 to 6 between runs with different `--reasoning-format` settings; no causal claim from two runs
+- [x] R-9 (owner: Kim; done 2026-11-09): one sentence in `docs/providers.md`: JSON moved 10 to 6 between runs with different `--reasoning-format` settings; no causal claim from two runs
 - [ ] OPT-1 (optional; owner: Kim): replace the always-skipping `test_live_probe_marker_exists_for_manual_runs`
 
 ## M2 - Agent loop, run state, budgets, timeouts/retries, scripted provider (in progress)
 - [x] R-3 first (see above; 2026-11-08)
-- [ ] `RunState` + `Action` union (`ToolCall | FinalAnswer | GiveUp`) + `Policy` protocol
+- [x] `RunState` + `Action` union (`ToolCall | FinalAnswer | GiveUp`) + `Policy` protocol + `Budgets` (`agentic_research.agent`; terminal statuses, JSON round-trip; 2026-11-09)
 - [ ] `ToolExecutor`: per-call timeout, seeded backoff retries for `transient`/`timeout` only, injectable clock/sleeper
 - [ ] Loop with budgets (steps, tool calls total/per tool, deadline, tokens, repair attempts), loop detection, observation shaping
 - [ ] `ScriptedProvider`, `LLMPolicy` skeleton, `OraclePolicy`; tracer on every span; `arp run --provider scripted` and `arp trace show`

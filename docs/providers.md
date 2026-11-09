@@ -72,7 +72,9 @@ pass
 
 Run 2 decides the default under the frozen rule: native stays default (20 ≥ 18 and 20 ≥ 6).
 JSON-in-text remains the fallback; it scored 10/20 on run 1 and 6/20 on run 2 on this
-prompt set (see JSON note above). Reports:
+prompt set (see JSON note above). The JSON score moved from 10/20 to 6/20 between runs that used
+different `--reasoning-format` settings (default auto, then `none`); two runs cannot support a causal
+claim about that setting, so none is made. Reports:
 [`m1-toolcall-probe-20261106T011244Z.json`](../evals/results/m1-toolcall-probe-20261106T011244Z.json),
 [`m1-toolcall-probe-20261107T011142Z.json`](../evals/results/m1-toolcall-probe-20261107T011142Z.json).
 Doctor output for run 2: [`m1-doctor-20261107.txt`](../evals/results/m1-doctor-20261107.txt).
