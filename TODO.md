@@ -56,7 +56,7 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 ## M2 - Agent loop, run state, budgets, timeouts/retries, scripted provider (in progress)
 - [x] R-3 first (see above; 2026-11-08)
 - [x] `RunState` + `Action` union (`ToolCall | FinalAnswer | GiveUp`) + `Policy` protocol + `Budgets` (`agentic_research.agent`; terminal statuses, JSON round-trip; 2026-11-09)
-- [ ] `ToolExecutor`: per-call timeout, seeded backoff retries for `transient`/`timeout` only, injectable clock/sleeper
+- [x] `ToolExecutor`: per-call timeout, seeded backoff retries for `transient`/`timeout` only, injectable clock/sleeper, optional deadline (`agentic_research.tools.executor`; 2026-11-10)
 - [ ] Loop with budgets (steps, tool calls total/per tool, deadline, tokens, repair attempts), loop detection, observation shaping
 - [ ] `ScriptedProvider`, `LLMPolicy` skeleton, `OraclePolicy`; tracer on every span; `arp run --provider scripted` and `arp trace show`
 
