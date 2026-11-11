@@ -38,6 +38,7 @@ class EchoTool:
     output_model: type[ToolOutput] = EchoOutput
     timeout_s = 1.0
     retry = RetryPolicy.no_retry()
+    idempotent = False
 
     async def run(self, args: EchoArgs, ctx: ToolContext) -> EchoOutput:
         return EchoOutput(text=args.text * args.times)
@@ -58,6 +59,7 @@ class ClockTool:
     output_model: type[ToolOutput] = ClockOutput
     timeout_s = 2
     retry = RetryPolicy()
+    idempotent = True
 
     async def run(self, args: NoArgs, ctx: ToolContext) -> ClockOutput:
         return ClockOutput(now="2026-10-30T00:00:00Z")
@@ -160,6 +162,14 @@ class LooseArgs(ToolArgs):
         ({"timeout_s": "5"}, "timeout_s must be a finite number > 0"),
         ({"retry": None}, "retry must be a RetryPolicy"),
         ({"retry": {"max_attempts": 2}}, "retry must be a RetryPolicy"),
+        ({"idempotent": None}, "idempotent must be a bool"),
+        ({"idempotent": 1}, "idempotent must be a bool"),
+        ({"idempotent": "yes"}, "idempotent must be a bool"),
+        ({"retry": RetryPolicy()}, "only an idempotent tool may retry on timeout"),
+        (
+            {"retry": RetryPolicy(retry_on=frozenset({ErrorClass.TIMEOUT}))},
+            "only an idempotent tool may retry on timeout",
+        ),
         ({"run": None}, "has no run"),
         ({"run": lambda self, args, ctx: None}, "run\\(\\) must be async"),
     ],
@@ -167,6 +177,22 @@ class LooseArgs(ToolArgs):
 def test_invalid_tool_definitions_are_rejected(overrides: dict[str, Any], message: str) -> None:
     with pytest.raises(ToolRegistrationError, match=message):
         ToolRegistry([make_tool(**overrides)])
+
+
+@pytest.mark.parametrize(
+    ("retry", "idempotent"),
+    [
+        (RetryPolicy(retry_on=frozenset({ErrorClass.TRANSIENT})), False),
+        (RetryPolicy.no_retry(), False),
+        (RetryPolicy(), True),
+        (RetryPolicy(retry_on=frozenset({ErrorClass.TIMEOUT})), True),
+    ],
+)
+def test_timeout_retry_needs_idempotent_but_transient_does_not(
+    retry: RetryPolicy, idempotent: bool
+) -> None:
+    registry = ToolRegistry([make_tool(retry=retry, idempotent=idempotent)])
+    assert registry.names == ["echo"]
 
 
 def test_failed_registration_leaves_registry_unchanged(registry: ToolRegistry) -> None:

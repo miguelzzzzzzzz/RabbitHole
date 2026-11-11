@@ -68,10 +68,12 @@ class ScriptTool:
         name: str = "script",
         timeout_s: float = 1.0,
         retry: RetryPolicy | None = None,
+        idempotent: bool = True,
     ) -> None:
         self.name = name
         self.timeout_s = timeout_s
         self.retry = retry if retry is not None else RetryPolicy()
+        self.idempotent = idempotent
         self._steps = list(steps)
         self.contexts: list[ToolContext] = []
 

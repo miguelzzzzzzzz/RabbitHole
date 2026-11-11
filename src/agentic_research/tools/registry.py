@@ -109,8 +109,19 @@ class ToolRegistry:
             raise ToolRegistrationError(
                 f"tool {name!r}: timeout_s must be a finite number > 0, got {timeout_s!r}"
             )
-        if not isinstance(getattr(tool, "retry", None), RetryPolicy):
+        retry = getattr(tool, "retry", None)
+        if not isinstance(retry, RetryPolicy):
             raise ToolRegistrationError(f"tool {name!r}: retry must be a RetryPolicy")
+        idempotent = getattr(tool, "idempotent", None)
+        if not isinstance(idempotent, bool):
+            raise ToolRegistrationError(
+                f"tool {name!r}: idempotent must be a bool, got {idempotent!r}"
+            )
+        if ErrorClass.TIMEOUT in retry.retry_on and not idempotent:
+            raise ToolRegistrationError(
+                f"tool {name!r}: only an idempotent tool may retry on timeout; "
+                "set idempotent = True or drop timeout from retry.retry_on"
+            )
         run = getattr(tool, "run", None)
         if not callable(run):
             raise ToolRegistrationError(f"tool {name!r} has no run() method")

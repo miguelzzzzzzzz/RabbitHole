@@ -116,6 +116,7 @@ class SearchCorpusStubTool:
     output_model: type[ToolOutput] = SearchCorpusOutput
     timeout_s = 30.0
     retry = RetryPolicy.no_retry()
+    idempotent = True  # read-only search
 
     async def run(self, args: SearchCorpusArgs, ctx: ToolContext) -> SearchCorpusOutput:
         raise NotImplementedError("search_corpus is a probe stub; wired in M3")

@@ -267,6 +267,7 @@ class CalculatorTool:
     timeout_s = 1.0
     # Deterministic: the same expression fails the same way, so never retry.
     retry = RetryPolicy.no_retry()
+    idempotent = True  # a pure function of its input
 
     async def run(self, args: CalculatorArgs, ctx: ToolContext) -> CalculatorOutput:
         try:

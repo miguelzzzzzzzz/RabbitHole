@@ -415,4 +415,5 @@ def test_bad_arguments_are_rejected_before_running(registry: ToolRegistry, argum
 def test_tool_attributes() -> None:
     tool = CalculatorTool()
     assert tool.retry.max_attempts == 1
+    assert tool.idempotent is True
     assert tool.timeout_s == 1.0

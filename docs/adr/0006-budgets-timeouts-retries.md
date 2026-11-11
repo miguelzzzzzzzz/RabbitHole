@@ -13,7 +13,10 @@ most 5 tools") are not enforcement.
   specific terminal status.
 - **Errors classified**: `transient`, `timeout`, `permanent`,
   `invalid_args`, `bad_output`. Only `transient` and `timeout` retry, with
-  exponential backoff and jitter from a seeded RNG.
+  exponential backoff and jitter from a seeded RNG. Amendment (2026-11-11,
+  from Chad's M2 review check): `timeout` may only be retried by a tool that
+  declares `idempotent = True`, enforced at registration, since a timed-out
+  call may have completed on the other side.
 - **Per-tool timeouts** via `asyncio.timeout`, so cancellation is real.
 - **Loop detection** on repeated identical calls.
 - **Injectable clock and sleeper**, so all of this is unit- and

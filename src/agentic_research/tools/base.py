@@ -110,8 +110,10 @@ class RetryPolicy(BaseModel):
 
     ``retry_on`` may only contain retryable classes (``transient``,
     ``timeout``); retrying a permanent or invalid call wastes budget and hides
-    bugs (ADR-0006). Jitter is drawn from a caller-supplied RNG so that runs
-    are reproducible from a seed.
+    bugs (ADR-0006). The registry also refuses ``timeout`` in ``retry_on`` for
+    a tool that is not ``idempotent``: a timed-out call may still have taken
+    effect, so running it again could repeat a side effect. Jitter is drawn
+    from a caller-supplied RNG so that runs are reproducible from a seed.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -182,6 +184,11 @@ class Tool(Protocol[ArgsT, OutT]):
     ``args_model`` is exported as the JSON schema the model sees;
     ``output_model`` validates what the tool returns. Timeouts and retries
     are enforced by the executor (M2), not by the tool.
+
+    ``idempotent`` declares that running the same call twice has the same
+    effect as running it once. Only an idempotent tool may retry after a
+    ``timeout`` (the registry enforces this), because a call that timed out on
+    our side may have completed on the other.
     """
 
     # Read-only members, so plain class attributes satisfy the protocol.
@@ -197,5 +204,7 @@ class Tool(Protocol[ArgsT, OutT]):
     def timeout_s(self) -> float: ...
     @property
     def retry(self) -> RetryPolicy: ...
+    @property
+    def idempotent(self) -> bool: ...
 
     async def run(self, args: ArgsT, ctx: ToolContext) -> OutT: ...
