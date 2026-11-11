@@ -91,6 +91,11 @@ class ToolExecutor:
         self._clock = clock
         self._sleeper = sleeper
 
+    @property
+    def clock(self) -> Clock:
+        """The clock deadlines are measured on; the agent loop shares it."""
+        return self._clock
+
     async def execute(
         self,
         name: str,

@@ -15,8 +15,11 @@ schema v1 (JSONL), `arp tools schema`, a pinned local model runtime
 preflight + serve-flag + `/v1/models` checks), and a minimal
 `OpenAICompatibleProvider` (httpx, native `tool_calls` parsing), and the
 strict JSON-in-text tool protocol parser, and the frozen tool-calling probe
-prompts + 18/20 bar (`probes/tool_calls.v1.yaml`, `config/probe.toml`). Not
-built yet: the agent loop, research tools, citations, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
+prompts + 18/20 bar (`probes/tool_calls.v1.yaml`, `config/probe.toml`), and
+the M2 agent core: run state, a `ToolExecutor` with timeouts and seeded
+retries, and the budgeted `AgentLoop` (no loop detection, observation
+shaping, tracing or CLI yet). Not built yet: those M2 pieces, a scripted
+provider and real policies, research tools, citations, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
 
 ## Architecture
 

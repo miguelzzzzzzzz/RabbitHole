@@ -23,7 +23,7 @@ from agentic_research.agent import (
     RunStatus,
     ToolCall,
 )
-from agentic_research.agent.state import StepRecord, Task
+from agentic_research.agent.state import StepRecord, Task, Verdict
 from agentic_research.providers.types import ChatMessage
 from agentic_research.tools.base import ErrorClass, ToolError, ToolResult
 
@@ -87,7 +87,7 @@ def test_unlimited_budgets_never_exhaust() -> None:
         (
             Budgets(max_tool_calls=2),
             {"tool_calls": 2, "per_tool": {"a": 2}},
-            None,
+            "b",
             BudgetKind.TOOL_CALLS,
         ),
         (
@@ -119,6 +119,13 @@ def test_per_tool_budget_only_applies_to_the_named_tool() -> None:
     assert b.exhausted(c, "b") is None
     assert b.exhausted(c) is None
     assert b.exhausted(c, "a") is BudgetKind.TOOL_CALLS_PER_TOOL
+
+
+def test_tool_call_budgets_only_apply_to_a_call_about_to_run() -> None:
+    b = Budgets(max_tool_calls=2, max_tool_calls_per_tool=1)
+    c = BudgetCounters(tool_calls=2, per_tool={"a": 2})
+    assert b.exhausted(c) is None  # a final answer is still allowed
+    assert b.exhausted(c, "b") is BudgetKind.TOOL_CALLS
 
 
 def test_simultaneous_exhaustion_uses_a_fixed_order() -> None:
@@ -288,3 +295,38 @@ def test_a_plain_class_satisfies_the_policy_protocol() -> None:
     policy: Policy = _Fixed()
     action = asyncio.run(policy.next_action(_state()))
     assert action == FinalAnswer(answer="echo: What is 2+2?")
+
+
+# ---- verdicts ---------------------------------------------------------------
+
+
+def test_verdict_constructors_and_invariants() -> None:
+    assert Verdict.accept().accepted
+    rejected = Verdict.reject("bad_answer", "cite a source")
+    assert (rejected.accepted, rejected.reason, rejected.message) == (
+        False,
+        "bad_answer",
+        "cite a source",
+    )
+    with pytest.raises(ValidationError, match="no reason or message"):
+        Verdict(accepted=True, reason="x")
+    with pytest.raises(ValidationError, match="no reason or message"):
+        Verdict(accepted=True, message="fine")
+    with pytest.raises(ValidationError, match="needs a reason code"):
+        Verdict(accepted=False)
+    with pytest.raises(ValidationError):
+        Verdict.reject("Not A Code")
+
+
+def test_only_a_final_answer_step_carries_a_verdict() -> None:
+    record = StepRecord(index=0, action=FinalAnswer(answer="x"), verdict=Verdict.accept())
+    assert record.verdict == Verdict.accept()
+    with pytest.raises(ValidationError, match="only a final_answer step"):
+        StepRecord(index=0, action=ToolCall(tool="t"), verdict=Verdict.accept())
+
+
+def test_a_state_with_a_verdict_round_trips() -> None:
+    s = _state()
+    s.add_step(FinalAnswer(answer="x"), verdict=Verdict.reject("bad_answer", "no"))
+    again = RunState.from_json(s.to_json())
+    assert again.steps[0].verdict == Verdict.reject("bad_answer", "no")

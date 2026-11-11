@@ -1,6 +1,6 @@
 """Serializable run state, budgets and terminal statuses.
 
-The loop (next commit) owns all transitions; this module only defines the
+The loop (`agentic_research.agent.loop`) owns all transitions; this module only defines the
 data and the invariants that keep it consistent:
 
 - ``status`` is ``running`` until `RunState.finish` is called once; a
@@ -75,9 +75,11 @@ class Budgets(BaseModel):
     def exhausted(self, counters: BudgetCounters, tool: str | None = None) -> BudgetKind | None:
         """The first exhausted budget, or ``None``.
 
-        ``tool`` is the tool about to be called, if any; it enables the
-        per-tool check. The order is fixed so a run that hits two limits at
-        once gets a deterministic status.
+        ``tool`` is the tool about to be called, if any. The tool-call budgets
+        (total and per tool) are only checked when it is given: running out
+        of tool calls stops the next call, not a final answer. The order is
+        fixed so a run that hits two limits at once gets a deterministic
+        status.
         """
         if self.max_steps is not None and counters.steps >= self.max_steps:
             return BudgetKind.STEPS
@@ -87,11 +89,12 @@ class Budgets(BaseModel):
             return BudgetKind.TOKENS
         if self.max_repairs is not None and counters.repairs > self.max_repairs:
             return BudgetKind.REPAIRS
+        if tool is None:
+            return None
         if self.max_tool_calls is not None and counters.tool_calls >= self.max_tool_calls:
             return BudgetKind.TOOL_CALLS
         if (
-            tool is not None
-            and self.max_tool_calls_per_tool is not None
+            self.max_tool_calls_per_tool is not None
             and counters.per_tool.get(tool, 0) >= self.max_tool_calls_per_tool
         ):
             return BudgetKind.TOOL_CALLS_PER_TOOL
@@ -99,13 +102,23 @@ class Budgets(BaseModel):
 
 
 class BudgetCounters(BaseModel):
-    """What a run has consumed so far."""
+    """What a run has consumed so far.
+
+    ``tool_calls`` and ``per_tool`` count calls the policy asked for (each
+    counts once against ``max_tool_calls``, however many retries it took).
+    ``tool_attempts`` counts actual tool runs, retries included, and
+    ``backoff_s`` the time slept between retries; both are already inside
+    ``elapsed_s``, which is wall time on the loop's clock and is what the
+    deadline is checked against.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
     steps: Count = 0
     tool_calls: Count = 0
     per_tool: dict[str, Count] = Field(default_factory=dict)
+    tool_attempts: Count = 0
+    backoff_s: Seconds = 0.0
     tokens: Count = 0
     repairs: Count = 0
     elapsed_s: Seconds = 0.0
@@ -140,19 +153,56 @@ class Evidence(BaseModel):
     text: str
 
 
+class Verdict(BaseModel):
+    """A verifier's decision on a `FinalAnswer`.
+
+    A rejection carries a ``reason`` code and a ``message`` the policy can use
+    to repair its answer; an acceptance carries neither reason nor message.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    accepted: bool
+    reason: Annotated[str, Field(pattern=_CODE_PATTERN, max_length=64)] | None = None
+    message: str = ""
+
+    @model_validator(mode="after")
+    def _reason_iff_rejected(self) -> Self:
+        if self.accepted and (self.reason is not None or self.message):
+            raise ValueError("an accepted verdict carries no reason or message")
+        if not self.accepted and self.reason is None:
+            raise ValueError("a rejected verdict needs a reason code")
+        return self
+
+    @classmethod
+    def accept(cls) -> Verdict:
+        return cls(accepted=True)
+
+    @classmethod
+    def reject(cls, reason: str, message: str = "") -> Verdict:
+        return cls(accepted=False, reason=reason, message=message)
+
+
 class StepRecord(BaseModel):
-    """One loop step: the chosen action and, for a tool call, its result."""
+    """One loop step: the chosen action and, for a tool call, its result.
+
+    A ``tool_call`` step without a result was refused by a budget before it
+    ran. A ``final_answer`` step may carry the verifier's ``verdict``.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
     index: Count
     action: Action
     result: ToolResult | None = None
+    verdict: Verdict | None = None
 
     @model_validator(mode="after")
     def _result_only_for_tool_calls(self) -> Self:
         if self.result is not None and self.action.kind != "tool_call":
             raise ValueError("only a tool_call step can carry a result")
+        if self.verdict is not None and self.action.kind != "final_answer":
+            raise ValueError("only a final_answer step can carry a verdict")
         return self
 
 
@@ -201,10 +251,15 @@ class RunState(BaseModel):
             return self.status.value
         return f"{self.status.value}:{self.detail}"
 
-    def add_step(self, action: Action, result: ToolResult | None = None) -> StepRecord:
+    def add_step(
+        self,
+        action: Action,
+        result: ToolResult | None = None,
+        verdict: Verdict | None = None,
+    ) -> StepRecord:
         """Append a step record with the next index. Not allowed once terminal."""
         self._require_running()
-        record = StepRecord(index=len(self.steps), action=action, result=result)
+        record = StepRecord(index=len(self.steps), action=action, result=result, verdict=verdict)
         self.steps.append(record)
         return record
 

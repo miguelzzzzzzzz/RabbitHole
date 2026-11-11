@@ -1,7 +1,8 @@
-"""Agent core: actions, run state, budgets and the policy protocol (M2)."""
+"""Agent core: actions, run state, budgets, policy and verifier hooks, and the loop (M2)."""
 
 from agentic_research.agent.actions import Action, FinalAnswer, GiveUp, ToolCall
-from agentic_research.agent.policy import Policy
+from agentic_research.agent.loop import AgentLoop
+from agentic_research.agent.policy import Decision, Policy
 from agentic_research.agent.state import (
     BudgetCounters,
     BudgetKind,
@@ -11,13 +12,18 @@ from agentic_research.agent.state import (
     RunStatus,
     StepRecord,
     Task,
+    Verdict,
 )
+from agentic_research.agent.verifier import AcceptAll, Verifier
 
 __all__ = [
+    "AcceptAll",
     "Action",
+    "AgentLoop",
     "BudgetCounters",
     "BudgetKind",
     "Budgets",
+    "Decision",
     "Evidence",
     "FinalAnswer",
     "GiveUp",
@@ -27,4 +33,6 @@ __all__ = [
     "StepRecord",
     "Task",
     "ToolCall",
+    "Verdict",
+    "Verifier",
 ]

@@ -57,7 +57,11 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] R-3 first (see above; 2026-11-08)
 - [x] `RunState` + `Action` union (`ToolCall | FinalAnswer | GiveUp`) + `Policy` protocol + `Budgets` (`agentic_research.agent`; terminal statuses, JSON round-trip; 2026-11-09)
 - [x] `ToolExecutor`: per-call timeout, seeded backoff retries for `transient`/`timeout` only, injectable clock/sleeper, optional deadline (`agentic_research.tools.executor`; 2026-11-10)
-- [ ] Loop with budgets (steps, tool calls total/per tool, deadline, tokens, repair attempts), loop detection, observation shaping
+- [x] Chad M2 check 1: `idempotent` tool flag; registry refuses `timeout` in `retry_on` without it (2026-11-11)
+- [x] Loop with budgets (steps, tool calls total/per tool, deadline, tokens, repair attempts), step timeout, verifier hook (`agentic_research.agent.loop.AgentLoop`; 2026-11-11)
+- [x] Chad M2 check 2: run deadline passed into `ToolExecutor.execute`; attempts and backoff sleeps charged to `elapsed_s` + `tool_attempts`/`backoff_s`, with tests (2026-11-11)
+- [ ] Loop detection: identical (tool, normalized args) beyond a threshold gives a guardrail observation, then `failed:loop`
+- [ ] Observation shaping: deterministic truncation of tool outputs, eliding old observations to one-line summaries (no LLM)
 - [ ] `ScriptedProvider`, `LLMPolicy` skeleton, `OraclePolicy`; tracer on every span; `arp run --provider scripted` and `arp trace show`
 
 ## Later (from M1)
