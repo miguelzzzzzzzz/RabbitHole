@@ -60,8 +60,8 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] Chad M2 check 1: `idempotent` tool flag; registry refuses `timeout` in `retry_on` without it (2026-11-11)
 - [x] Loop with budgets (steps, tool calls total/per tool, deadline, tokens, repair attempts), step timeout, verifier hook (`agentic_research.agent.loop.AgentLoop`; 2026-11-11)
 - [x] Chad M2 check 2: run deadline passed into `ToolExecutor.execute`; attempts and backoff sleeps charged to `elapsed_s` + `tool_attempts`/`backoff_s`, with tests (2026-11-11)
-- [ ] Loop detection: identical (tool, normalized args) beyond a threshold gives a guardrail observation, then `failed:loop`
-- [ ] Observation shaping: deterministic truncation of tool outputs, eliding old observations to one-line summaries (no LLM)
+- [x] Loop detection: identical (tool, normalized args) beyond a threshold gives a guardrail observation, then `failed:loop` (`agentic_research.agent.guards.LoopGuard`; 2026-11-12)
+- [x] Observation shaping: deterministic truncation of tool outputs, eliding old observations to one-line summaries (no LLM) (`agentic_research.agent.observations`, `RunState.observations`; 2026-11-12)
 - [ ] `ScriptedProvider`, `LLMPolicy` skeleton, `OraclePolicy`; tracer on every span; `arp run --provider scripted` and `arp trace show`
 
 ## Later (from M1)

@@ -2,7 +2,9 @@
 
 One iteration is: budget check, policy (bounded by the step timeout and the
 run deadline), then either the verifier hook (`FinalAnswer`), abstention
-(`GiveUp`) or the tool executor (`ToolCall`). The loop owns every state
+(`GiveUp`) or, for a `ToolCall`, the budget re-check, the loop guard and the
+tool executor. Each recorded step is then shaped into an observation for the
+policy (`agentic_research.agent.observations`). The loop owns every state
 transition and never raises for a policy, verifier or tool failure: each run
 ends in a terminal `RunState`.
 
@@ -27,7 +29,13 @@ Time: budgets and tool deadlines use the executor's clock, while policy and
 tool timeouts run on the event loop's clock via ``asyncio.timeout``. In
 production both are monotonic seconds; tests inject a fake executor clock.
 
-Loop detection, observation shaping and tracing are not wired in yet.
+Loop detection (`agentic_research.agent.guards`): a `ToolCall` that passed
+the budget re-check but repeats an identical call that already ran
+``max_identical_calls`` times is not run; it is recorded with a
+``loop_detected`` guardrail (one step, no tool-call budget). Repeating it once
+more ends the run as ``failed:loop``. ``loop_guard=None`` disables this.
+
+Tracing is not wired in yet.
 """
 
 from __future__ import annotations
@@ -37,10 +45,13 @@ import math
 from dataclasses import dataclass
 
 from agentic_research.agent.actions import FinalAnswer, GiveUp, ToolCall
+from agentic_research.agent.guards import LOOP, LOOP_DETECTED, LoopCheck, LoopGuard
+from agentic_research.agent.observations import ObservationShaper
 from agentic_research.agent.policy import Decision, Policy
 from agentic_research.agent.state import (
     BudgetKind,
     Budgets,
+    Guardrail,
     RunState,
     RunStatus,
     Task,
@@ -54,6 +65,7 @@ POLICY_TIMEOUT = "policy_timeout"
 POLICY_ERROR = "policy_error"
 INVALID_ACTION = "invalid_action"
 VERIFIER_ERROR = "verifier_error"
+DEFAULT_LOOP_GUARD = LoopGuard()
 
 
 @dataclass(frozen=True)
@@ -79,6 +91,8 @@ class AgentLoop:
         verifier: Verifier | None = None,
         step_timeout_s: float | None = None,
         run_id: str = "run",
+        loop_guard: LoopGuard | None = DEFAULT_LOOP_GUARD,
+        shaper: ObservationShaper | None = None,
     ) -> None:
         if budgets.max_steps is None:
             raise ValueError("AgentLoop needs budgets.max_steps so every run terminates")
@@ -95,6 +109,8 @@ class AgentLoop:
         self._verifier: Verifier = verifier if verifier is not None else AcceptAll()
         self._step_timeout_s = step_timeout_s
         self._run_id = run_id
+        self._loop_guard = loop_guard
+        self._shaper = shaper if shaper is not None else ObservationShaper()
 
     async def run(self, task: Task) -> RunState:
         state = RunState(task=task)
@@ -177,6 +193,14 @@ class AgentLoop:
             self._record(state, action)
             state.finish(RunStatus.BUDGET_EXHAUSTED, detail=kind)
             return
+        if self._loop_guard is not None:
+            check = self._loop_guard.check(state.steps, action)
+            if check is not LoopCheck.OK:
+                guardrail = Guardrail(code=LOOP_DETECTED, message=self._loop_guard.message(action))
+                self._record(state, action, guardrail=guardrail)
+                if check is LoopCheck.STOP:
+                    state.finish(RunStatus.FAILED, detail=LOOP)
+                return
         ctx = ToolContext(run_id=self._run_id, step=len(state.steps))
         execution = await self._executor.execute(action.tool, action.args, ctx, deadline=deadline)
         counters = state.counters
@@ -185,13 +209,17 @@ class AgentLoop:
         counters.backoff_s += execution.total_backoff_s
         self._record(state, action, result=execution.result)
 
-    @staticmethod
     def _record(
+        self,
         state: RunState,
         action: ToolCall | FinalAnswer | GiveUp,
         *,
         result: ToolResult | None = None,
         verdict: Verdict | None = None,
+        guardrail: Guardrail | None = None,
     ) -> None:
-        state.add_step(action, result=result, verdict=verdict)
+        record = state.add_step(action, result=result, verdict=verdict, guardrail=guardrail)
         state.counters.steps += 1
+        observation = self._shaper.observe(record)
+        if observation is not None:
+            self._shaper.add(state.observations, observation)

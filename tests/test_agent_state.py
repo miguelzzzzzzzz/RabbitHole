@@ -330,3 +330,69 @@ def test_a_state_with_a_verdict_round_trips() -> None:
     s.add_step(FinalAnswer(answer="x"), verdict=Verdict.reject("bad_answer", "no"))
     again = RunState.from_json(s.to_json())
     assert again.steps[0].verdict == Verdict.reject("bad_answer", "no")
+
+
+# ---- guardrails and observations ------------------------------------------------------
+
+
+def test_guardrail_only_on_a_refused_tool_call() -> None:
+    from agentic_research.agent import Guardrail
+
+    g = Guardrail(code="loop_detected", message="m")
+    StepRecord(index=0, action=ToolCall(tool="a"), guardrail=g)
+    with pytest.raises(ValidationError, match="refused tool_call"):
+        StepRecord(index=0, action=FinalAnswer(answer="x"), guardrail=g)
+    with pytest.raises(ValidationError, match="refused tool_call"):
+        StepRecord(
+            index=0,
+            action=ToolCall(tool="a"),
+            result=ToolResult(tool="a", output={}),
+            guardrail=g,
+        )
+    with pytest.raises(ValidationError):
+        Guardrail(code="Not A Code")
+
+
+def test_observation_invariants() -> None:
+    from agentic_research.agent import Observation
+
+    obs = Observation(step=0, source="tool", text="full", summary="step 0: a ok")
+    assert obs.elide() == Observation(
+        step=0, source="tool", text="step 0: a ok", summary="step 0: a ok", elided=True
+    )
+    with pytest.raises(ValidationError, match="elided"):
+        Observation(step=0, source="tool", text="full", summary="s", elided=True)
+    with pytest.raises(ValidationError):
+        Observation(step=0, source="tool", text="t", summary="two\nlines")
+    with pytest.raises(ValidationError):
+        Observation(step=0, source="model", text="t", summary="s")  # type: ignore[arg-type]
+
+
+def test_observations_must_name_existing_steps_in_order() -> None:
+    from agentic_research.agent import Observation
+
+    def obs(i: int) -> Observation:
+        return Observation(step=i, source="tool", text="t", summary="s")
+
+    steps = [
+        StepRecord(index=i, action=ToolCall(tool="a"), result=ToolResult(tool="a", output={}))
+        for i in range(2)
+    ]
+    task = Task(question="q")
+    RunState(task=task, steps=steps, observations=[obs(0), obs(1)])
+    for bad in ([obs(1), obs(0)], [obs(0), obs(0)], [obs(2)]):
+        with pytest.raises(ValidationError, match="observations"):
+            RunState(task=task, steps=steps, observations=bad)
+
+
+def test_state_with_guardrail_and_observations_round_trips() -> None:
+    from agentic_research.agent import Guardrail, Observation
+
+    state = _state()
+    state.add_step(ToolCall(tool="a"), guardrail=Guardrail(code="loop_detected", message="m"))
+    state.observations.append(
+        Observation(step=0, source="guardrail", text="g", summary="step 0: g")
+    )
+    state.finish(RunStatus.FAILED, detail="loop")
+    assert RunState.from_json(state.to_json()) == state
+    assert state.terminal_label == "failed:loop"

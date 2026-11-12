@@ -24,6 +24,8 @@ from agentic_research.agent import (
     Decision,
     FinalAnswer,
     GiveUp,
+    LoopGuard,
+    ObservationShaper,
     Policy,
     RunState,
     RunStatus,
@@ -130,6 +132,9 @@ class RejectWrong:
         return Verdict.accept()
 
 
+DEFAULT_GUARD = LoopGuard()
+
+
 def make_loop(
     items: Sequence[Scripted],
     budgets: Budgets,
@@ -138,6 +143,8 @@ def make_loop(
     time_: FakeTime | None = None,
     verifier: Verifier | None = None,
     step_timeout_s: float | None = None,
+    loop_guard: LoopGuard | None = DEFAULT_GUARD,
+    shaper: ObservationShaper | None = None,
 ) -> tuple[AgentLoop, ScriptedPolicy, FakeTime]:
     time_ = time_ or FakeTime()
     executor = ToolExecutor(ToolRegistry(tools), clock=time_.clock, sleeper=time_.sleep)
@@ -149,6 +156,8 @@ def make_loop(
         verifier=verifier,
         step_timeout_s=step_timeout_s,
         run_id="r-test",
+        loop_guard=loop_guard,
+        shaper=shaper,
     )
     return loop, policy, time_
 
@@ -569,15 +578,24 @@ _BUDGETS = st.builds(
 
 
 @settings(max_examples=150, deadline=None, suppress_health_check=[HealthCheck.too_slow])
-@given(script=st.lists(_SCRIPTED, max_size=15), budgets=_BUDGETS)
-def test_property_counters_stay_within_limits(script: list[Scripted], budgets: Budgets) -> None:
+@given(
+    script=st.lists(_SCRIPTED, max_size=15),
+    budgets=_BUDGETS,
+    max_identical=st.none() | st.integers(min_value=1, max_value=4),
+)
+def test_property_counters_stay_within_limits(
+    script: list[Scripted], budgets: Budgets, max_identical: int | None
+) -> None:
     time_ = FakeTime()
     tools = [
         CostTool("a", time_, cost=0.3),
         CostTool("b", time_, cost=0.05),
         CostTool("flaky", time_, cost=0.2, failures=2),
     ]
-    loop, policy, _ = make_loop(script, budgets, tools=tools, time_=time_, verifier=RejectWrong())
+    guard = None if max_identical is None else LoopGuard(max_identical_calls=max_identical)
+    loop, policy, _ = make_loop(
+        script, budgets, tools=tools, time_=time_, verifier=RejectWrong(), loop_guard=guard
+    )
     state = asyncio.run(loop.run(TASK))
 
     assert state.terminal
@@ -603,8 +621,231 @@ def test_property_counters_stay_within_limits(script: list[Scripted], budgets: B
             BudgetKind.REPAIRS: budgets.max_repairs,
         }[BudgetKind(state.detail)]
         assert limit is not None
+    for tool in tools:  # no identical call runs more often than the guard allows
+        if max_identical is not None:
+            assert len([s for s in state.steps if s.result and s.result.tool == tool.name]) <= (
+                max_identical
+            )
+    observed = [o.step for o in state.observations]
+    assert observed == sorted(set(observed))
+    assert sum(not o.elided for o in state.observations) <= 3
     if state.status is RunStatus.FAILED:
-        # With this policy and verifier the only failure is the script running out.
-        assert state.detail == "policy_error"
-        assert len(policy.seen) == len(script) + 1
+        # Besides the script running out, the only failure is an ignored loop guardrail.
+        if state.detail == "loop":
+            assert max_identical is not None
+            last = state.steps[-1]
+            assert last.guardrail is not None and last.result is None
+        else:
+            assert state.detail == "policy_error"
+            assert len(policy.seen) == len(script) + 1
     assert RunState.from_json(state.to_json()) == state
+
+
+# ---- loop detection ----------------------------------------------------------------
+
+
+class XArgs(ToolArgs):
+    x: float
+
+
+class EchoX:
+    """Takes one number; counts its runs."""
+
+    name = "echo"
+    description = "echo x"
+    args_model: type[ToolArgs] = XArgs
+    output_model: type[ToolOutput] = Out
+    timeout_s = 5.0
+    idempotent = True
+    retry = NO_JITTER
+
+    def __init__(self) -> None:
+        self.runs = 0
+
+    async def run(self, args: XArgs, ctx: ToolContext) -> Out:
+        self.runs += 1
+        return Out(value=int(args.x))
+
+
+async def test_identical_call_past_the_threshold_gets_a_guardrail_then_can_answer() -> None:
+    time_ = FakeTime()
+    tool = CostTool("a", time_)
+    loop, policy, _ = make_loop(
+        [CALL, CALL, CALL, ANSWER],
+        Budgets(max_steps=10),
+        tools=[tool],
+        time_=time_,
+        loop_guard=LoopGuard(max_identical_calls=2),
+    )
+    state = await loop.run(TASK)
+    assert state.terminal_label == "succeeded"
+    assert len(tool.contexts) == 2  # the third identical call never ran
+    refused = state.steps[2]
+    assert refused.result is None
+    assert refused.guardrail is not None and refused.guardrail.code == "loop_detected"
+    c = state.counters
+    assert (c.steps, c.tool_calls, c.per_tool, c.tool_attempts) == (4, 2, {"a": 2}, 2)
+    # The policy saw the guardrail as its newest observation before answering.
+    last = policy.seen[3].observations[-1]
+    assert (last.step, last.source) == (2, "guardrail")
+    assert "already ran 2 time(s)" in last.text
+
+
+async def test_ignoring_the_guardrail_fails_the_run_as_loop() -> None:
+    time_ = FakeTime()
+    tool = CostTool("a", time_)
+    loop, _, _ = make_loop(
+        [CALL] * 6,
+        Budgets(max_steps=10),
+        tools=[tool],
+        time_=time_,
+        loop_guard=LoopGuard(max_identical_calls=2),
+    )
+    state = await loop.run(TASK)
+    assert state.terminal_label == "failed:loop"
+    assert len(tool.contexts) == 2
+    assert [s.result is not None for s in state.steps] == [True, True, False, False]
+    assert [s.guardrail is not None for s in state.steps] == [False, False, True, True]
+    assert state.counters.steps == 4
+    assert RunState.from_json(state.to_json()) == state
+
+
+async def test_default_guard_allows_three_identical_calls() -> None:
+    time_ = FakeTime()
+    tool = CostTool("a", time_)
+    loop, _, _ = make_loop([CALL] * 5, Budgets(max_steps=10), tools=[tool], time_=time_)
+    state = await loop.run(TASK)
+    assert state.terminal_label == "failed:loop"
+    assert len(tool.contexts) == 3
+
+
+async def test_a_cycle_between_two_calls_is_caught() -> None:
+    time_ = FakeTime()
+    tools = [CostTool("a", time_), CostTool("b", time_)]
+    b = ToolCall(tool="b")
+    loop, _, _ = make_loop(
+        [CALL, b, CALL, b, CALL, b, CALL],
+        Budgets(max_steps=20),
+        tools=tools,
+        time_=time_,
+        loop_guard=LoopGuard(max_identical_calls=2),
+    )
+    state = await loop.run(TASK)
+    assert state.terminal_label == "failed:loop"
+    assert [len(t.contexts) for t in tools] == [2, 2]
+    assert [s.guardrail is not None for s in state.steps] == [False] * 4 + [True] * 3
+
+
+async def test_normalized_args_count_as_identical_and_new_args_run() -> None:
+    tool = EchoX()
+    script: list[Scripted] = [
+        ToolCall(tool="echo", args={"x": 2}),
+        ToolCall(tool="echo", args={"x": 2.0}),  # identical after normalization
+        ToolCall(tool="echo", args={"x": 3}),  # different: runs
+        FinalAnswer(answer="2"),
+    ]
+    time_ = FakeTime()
+    executor = ToolExecutor(ToolRegistry([tool]), clock=time_.clock, sleeper=time_.sleep)
+    loop = AgentLoop(
+        ScriptedPolicy(script),
+        executor,
+        Budgets(max_steps=10),
+        loop_guard=LoopGuard(max_identical_calls=1),
+    )
+    state = await loop.run(TASK)
+    assert state.terminal_label == "succeeded"
+    assert tool.runs == 2
+    assert [s.guardrail is not None for s in state.steps] == [False, True, False, False]
+
+
+async def test_loop_guard_none_disables_detection() -> None:
+    time_ = FakeTime()
+    tool = CostTool("a", time_)
+    loop, _, _ = make_loop(
+        [CALL] * 5 + [ANSWER], Budgets(max_steps=10), tools=[tool], time_=time_, loop_guard=None
+    )
+    state = await loop.run(TASK)
+    assert state.terminal_label == "succeeded"
+    assert len(tool.contexts) == 5
+
+
+async def test_budget_recheck_comes_before_the_loop_guard() -> None:
+    time_ = FakeTime()
+    tool = CostTool("a", time_)
+    loop, _, _ = make_loop(
+        [CALL] * 4,
+        Budgets(max_steps=10, max_tool_calls_per_tool=2),
+        tools=[tool],
+        time_=time_,
+        loop_guard=LoopGuard(max_identical_calls=2),
+    )
+    state = await loop.run(TASK)
+    assert state.terminal_label == "budget_exhausted:tool_calls_per_tool"
+    assert state.steps[-1].guardrail is None
+
+
+# ---- observation shaping in the loop -----------------------------------------------
+
+
+async def test_policy_sees_shaped_observations_with_old_ones_elided() -> None:
+    time_ = FakeTime()
+    tools = [CostTool("a", time_), CostTool("b", time_)]
+    script: list[Scripted] = [CALL, ToolCall(tool="b"), ToolCall(tool="nope"), ANSWER]
+    loop, policy, _ = make_loop(
+        script,
+        Budgets(max_steps=10),
+        tools=tools,
+        time_=time_,
+        shaper=ObservationShaper(keep_recent=2),
+    )
+    state = await loop.run(TASK)
+    assert state.terminal_label == "succeeded"
+    assert policy.seen[0].observations == []
+    assert [o.text for o in policy.seen[1].observations] == ['a ok: {"value":42}']
+    seen = policy.seen[3].observations
+    assert [(o.step, o.elided) for o in seen] == [(0, True), (1, False), (2, False)]
+    assert seen[0].text == "step 0: a ok, 12 chars elided"
+    assert seen[2].text.startswith("nope error invalid_args/unknown_tool: ")
+    # The accepted answer adds no observation; full results stay in the steps.
+    assert state.observations == seen
+    first = state.steps[0].result
+    assert first is not None and first.output == {"value": 42}
+
+
+async def test_rejected_answer_becomes_a_feedback_observation() -> None:
+    loop, policy, _ = make_loop(
+        [FinalAnswer(answer="wrong"), ANSWER], Budgets(max_steps=5), verifier=RejectWrong()
+    )
+    state = await loop.run(TASK)
+    assert state.terminal_label == "succeeded"
+    (feedback,) = policy.seen[1].observations
+    assert (feedback.source, feedback.text) == ("verifier", "answer rejected bad_answer: try again")
+
+
+async def test_long_tool_output_is_truncated_for_the_policy_only() -> None:
+    class Big(ToolOutput):
+        text: str
+
+    class BigTool:
+        name = "big"
+        description = "big"
+        args_model: type[ToolArgs] = NoArgs
+        output_model: type[ToolOutput] = Big
+        timeout_s = 5.0
+        idempotent = True
+        retry = NO_JITTER
+
+        async def run(self, args: NoArgs, ctx: ToolContext) -> Big:
+            return Big(text="z" * 500)
+
+    time_ = FakeTime()
+    executor = ToolExecutor(ToolRegistry([BigTool()]), clock=time_.clock, sleeper=time_.sleep)
+    policy = ScriptedPolicy([ToolCall(tool="big"), ANSWER])
+    loop = AgentLoop(policy, executor, Budgets(max_steps=5), shaper=ObservationShaper(max_chars=40))
+    state = await loop.run(TASK)
+    (obs,) = policy.seen[1].observations
+    assert obs.text.startswith('big ok: {"text":"zzz')
+    assert obs.truncated_chars == len('big ok: {"text":"' + "z" * 500 + '"}') - 40
+    assert obs.text.endswith(f"...[truncated {obs.truncated_chars} chars]")
+    result = state.steps[0].result
+    assert result is not None and result.output == {"text": "z" * 500}

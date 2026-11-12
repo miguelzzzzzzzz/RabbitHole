@@ -18,7 +18,12 @@ most 5 tools") are not enforcement.
   declares `idempotent = True`, enforced at registration, since a timed-out
   call may have completed on the other side.
 - **Per-tool timeouts** via `asyncio.timeout`, so cancellation is real.
-- **Loop detection** on repeated identical calls.
+- **Loop detection** on repeated identical calls. Implemented (2026-11-12)
+  as `agentic_research.agent.guards.LoopGuard`: calls are identical when the
+  tool and the canonicalized arguments match, counted over the whole run.
+  After `max_identical_calls` runs (default 3) the next identical call is
+  refused with a `loop_detected` guardrail observation; repeating it again
+  ends the run as `failed:loop`. The budget re-check runs first.
 - **Injectable clock and sleeper**, so all of this is unit- and
   property-tested without real waiting.
 

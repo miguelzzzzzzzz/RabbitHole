@@ -10,12 +10,15 @@ data and the invariants that keep it consistent:
   gives the ``budget_exhausted:<kind>`` / ``failed:<reason>`` strings from the
   plan.
 - A state round-trips through JSON (`to_json` / `from_json`).
+- ``observations`` is the shaped, policy-facing view of the steps (built by
+  `agentic_research.agent.observations`); the full results stay in
+  ``steps``.
 """
 
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, Any, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -183,11 +186,24 @@ class Verdict(BaseModel):
         return cls(accepted=False, reason=reason, message=message)
 
 
+class Guardrail(BaseModel):
+    """Why the loop refused to run a tool call (for example ``loop_detected``).
+
+    ``message`` is fixed text written by the loop, safe to show the model.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    code: Annotated[str, Field(pattern=_CODE_PATTERN, max_length=64)]
+    message: str = ""
+
+
 class StepRecord(BaseModel):
     """One loop step: the chosen action and, for a tool call, its result.
 
-    A ``tool_call`` step without a result was refused by a budget before it
-    ran. A ``final_answer`` step may carry the verifier's ``verdict``.
+    A ``tool_call`` step without a result was refused before it ran: by a
+    guardrail (``guardrail`` is set) or by a budget (it is not). A
+    ``final_answer`` step may carry the verifier's ``verdict``.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -196,14 +212,47 @@ class StepRecord(BaseModel):
     action: Action
     result: ToolResult | None = None
     verdict: Verdict | None = None
+    guardrail: Guardrail | None = None
 
     @model_validator(mode="after")
     def _result_only_for_tool_calls(self) -> Self:
         if self.result is not None and self.action.kind != "tool_call":
             raise ValueError("only a tool_call step can carry a result")
+        if self.guardrail is not None and (
+            self.action.kind != "tool_call" or self.result is not None
+        ):
+            raise ValueError("only a refused tool_call step can carry a guardrail")
         if self.verdict is not None and self.action.kind != "final_answer":
             raise ValueError("only a final_answer step can carry a verdict")
         return self
+
+
+class Observation(BaseModel):
+    """What the policy is shown about one step.
+
+    ``text`` is the full observation, truncated to the shaper's limit
+    (``truncated_chars`` says how much was cut). Once the observation is old
+    it is *elided*: ``text`` becomes the one-line ``summary``.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    step: Count
+    source: Literal["tool", "guardrail", "verifier"]
+    text: str
+    summary: str = Field(min_length=1, pattern=r"^[^\n\r]*$")
+    truncated_chars: Count = 0
+    elided: bool = False
+
+    @model_validator(mode="after")
+    def _elided_text_is_summary(self) -> Self:
+        if self.elided and self.text != self.summary:
+            raise ValueError("an elided observation's text is its summary")
+        return self
+
+    def elide(self) -> Observation:
+        """This observation reduced to its one-line summary."""
+        return self.model_copy(update={"text": self.summary, "elided": True})
 
 
 class RunState(BaseModel):
@@ -216,6 +265,7 @@ class RunState(BaseModel):
     messages: list[ChatMessage] = Field(default_factory=list)
     evidence: dict[str, Evidence] = Field(default_factory=dict)
     steps: list[StepRecord] = Field(default_factory=list)
+    observations: list[Observation] = Field(default_factory=list)
     counters: BudgetCounters = Field(default_factory=BudgetCounters)
     status: RunStatus = RunStatus.RUNNING
     detail: Annotated[str, Field(pattern=_CODE_PATTERN, max_length=64)] | None = None
@@ -238,6 +288,9 @@ class RunState(BaseModel):
             raise ValueError("answer is set exactly when the run succeeded")
         if [s.index for s in self.steps] != list(range(len(self.steps))):
             raise ValueError("step indexes must be contiguous from 0")
+        seen = [o.step for o in self.observations]
+        if seen != sorted(set(seen)) or any(i >= len(self.steps) for i in seen):
+            raise ValueError("observations must name existing steps, once each, in order")
         return self
 
     @property
@@ -256,10 +309,17 @@ class RunState(BaseModel):
         action: Action,
         result: ToolResult | None = None,
         verdict: Verdict | None = None,
+        guardrail: Guardrail | None = None,
     ) -> StepRecord:
         """Append a step record with the next index. Not allowed once terminal."""
         self._require_running()
-        record = StepRecord(index=len(self.steps), action=action, result=result, verdict=verdict)
+        record = StepRecord(
+            index=len(self.steps),
+            action=action,
+            result=result,
+            verdict=verdict,
+            guardrail=guardrail,
+        )
         self.steps.append(record)
         return record
 
