@@ -40,6 +40,7 @@ from typing import Any, Final, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
+from agentic_research.providers.types import ChatMessage
 from agentic_research.trace.schema import ParseFailure
 
 #: Stable reason codes emitted by this parser (``ReasonCode`` pattern).
@@ -184,6 +185,37 @@ def _strip_leading_think(text: str) -> tuple[str, bool, str | None, str]:
             "leading <think> body is not empty",
         )
     return remainder, True, None, ""
+
+
+def leaked_think_reason(message: ChatMessage) -> str | None:
+    """Return a think-block failure reason when reasoning leaked into a reply.
+
+    Checks ``message.reasoning_content`` (llama.cpp auto/deepseek) first, then
+    a leading ``<think>`` in ``content``: a non-empty body is
+    ``think_block_present`` and a missing ``</think>`` is
+    ``think_block_unclosed``. Both fail the reply in either tool format, even
+    when native ``tool_calls`` are otherwise valid. An empty leading think
+    block in content is not a failure (see `strip_empty_think`).
+    """
+    reasoning = message.reasoning_content
+    if isinstance(reasoning, str) and reasoning.strip():
+        return REASON_THINK_BLOCK_PRESENT
+    content = message.content
+    if isinstance(content, str) and content:
+        _remainder, _empty, reason, _detail = _strip_leading_think(content)
+        return reason
+    return None
+
+
+def strip_empty_think(text: str) -> str:
+    """``text`` without one leading empty ``<think></think>`` block.
+
+    Text that does not start with a think block, or whose leading think
+    block is non-empty or unclosed, is returned unchanged; callers reject
+    those cases first with `leaked_think_reason`.
+    """
+    remainder, _empty, _reason, _detail = _strip_leading_think(text)
+    return remainder
 
 
 def _extract_fenced_payload(

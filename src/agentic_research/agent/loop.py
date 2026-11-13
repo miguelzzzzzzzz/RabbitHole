@@ -35,6 +35,9 @@ the budget re-check but repeats an identical call that already ran
 ``loop_detected`` guardrail (one step, no tool-call budget). Repeating it once
 more ends the run as ``failed:loop``. ``loop_guard=None`` disables this.
 
+A policy that raises `PolicyFailure` ends the run as ``failed:<reason>``
+with its reason code; any other policy exception is ``failed:policy_error``.
+
 Tracing is not wired in yet.
 """
 
@@ -47,7 +50,7 @@ from dataclasses import dataclass
 from agentic_research.agent.actions import FinalAnswer, GiveUp, ToolCall
 from agentic_research.agent.guards import LOOP, LOOP_DETECTED, LoopCheck, LoopGuard
 from agentic_research.agent.observations import ObservationShaper
-from agentic_research.agent.policy import Decision, Policy
+from agentic_research.agent.policy import Decision, Policy, PolicyFailure
 from agentic_research.agent.state import (
     BudgetKind,
     Budgets,
@@ -162,6 +165,8 @@ class AgentLoop:
             if deadline_binds:
                 return _Stop(RunStatus.BUDGET_EXHAUSTED, BudgetKind.DEADLINE)
             return _Stop(RunStatus.FAILED, POLICY_TIMEOUT)
+        except PolicyFailure as exc:  # the policy's own classified failure
+            return _Stop(RunStatus.FAILED, exc.reason)
         except Exception:  # a broken policy must not crash the loop
             return _Stop(RunStatus.FAILED, POLICY_ERROR)
         if isinstance(raw, Decision):

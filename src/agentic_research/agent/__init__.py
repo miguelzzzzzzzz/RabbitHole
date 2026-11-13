@@ -4,7 +4,7 @@ from agentic_research.agent.actions import Action, FinalAnswer, GiveUp, ToolCall
 from agentic_research.agent.guards import LoopCheck, LoopGuard, call_key, canonical_args
 from agentic_research.agent.loop import AgentLoop
 from agentic_research.agent.observations import ObservationShaper
-from agentic_research.agent.policy import Decision, Policy
+from agentic_research.agent.policy import Decision, Policy, PolicyFailure
 from agentic_research.agent.state import (
     BudgetCounters,
     BudgetKind,
@@ -37,6 +37,7 @@ __all__ = [
     "Observation",
     "ObservationShaper",
     "Policy",
+    "PolicyFailure",
     "RunState",
     "RunStatus",
     "StepRecord",

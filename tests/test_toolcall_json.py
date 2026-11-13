@@ -27,8 +27,11 @@ from agentic_research.providers.toolcall_json import (
     ParsedFinalAnswer,
     ParsedToolCall,
     ParseFailureCounter,
+    leaked_think_reason,
     parse_toolcall_json,
+    strip_empty_think,
 )
+from agentic_research.providers.types import ChatMessage
 from agentic_research.tools.calculator import CalculatorArgs
 
 
@@ -319,3 +322,40 @@ def test_only_one_leading_think_is_considered() -> None:
     assert result.failure is not None
     assert result.failure.reason == REASON_LEADING_CONTENT
     assert result.empty_think_stripped is True
+
+
+# --- leaked_think_reason / strip_empty_think (shared by the probe and LLMPolicy) ---
+
+
+@pytest.mark.parametrize(
+    ("content", "reasoning", "expected"),
+    [
+        (None, None, None),
+        ("", None, None),
+        ("42", None, None),
+        ("<think></think>42", None, None),
+        ("  <think>\n</think>42", "  ", None),
+        ("<think>why</think>42", None, "think_block_present"),
+        ("<think>42", None, "think_block_unclosed"),
+        ("42", "hidden thoughts", "think_block_present"),
+    ],
+)
+def test_leaked_think_reason(
+    content: str | None, reasoning: str | None, expected: str | None
+) -> None:
+    message = ChatMessage(role="assistant", content=content, reasoning_content=reasoning)
+    assert leaked_think_reason(message) == expected
+
+
+@pytest.mark.parametrize(
+    ("text", "expected"),
+    [
+        ("<think></think>42", "42"),
+        (" <think>\n\n</think>\n42", "\n42"),
+        ("42", "42"),
+        ("<think>x</think>42", "<think>x</think>42"),
+        ("<think>42", "<think>42"),
+    ],
+)
+def test_strip_empty_think(text: str, expected: str) -> None:
+    assert strip_empty_think(text) == expected

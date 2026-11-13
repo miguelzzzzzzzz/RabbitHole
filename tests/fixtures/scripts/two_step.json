@@ -1,0 +1,14 @@
+{
+  "schema_version": 1,
+  "question": "What is 6*7?",
+  "turns": [
+    {
+      "tool_calls": [{"id": "call_a", "name": "calculator", "arguments": {"expression": "6*7"}}],
+      "usage": {"prompt_tokens": 120, "completion_tokens": 18, "total_tokens": 138}
+    },
+    {
+      "content": "6*7 = 42.",
+      "usage": {"prompt_tokens": 160, "completion_tokens": 7, "total_tokens": 167}
+    }
+  ]
+}

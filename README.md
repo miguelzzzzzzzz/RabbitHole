@@ -17,9 +17,11 @@ preflight + serve-flag + `/v1/models` checks), and a minimal
 strict JSON-in-text tool protocol parser, and the frozen tool-calling probe
 prompts + 18/20 bar (`probes/tool_calls.v1.yaml`, `config/probe.toml`), and
 the M2 agent core: run state, a `ToolExecutor` with timeouts and seeded
-retries, and the budgeted `AgentLoop` with identical-call loop detection and
-deterministic observation shaping (no tracing or CLI yet). Not built yet:
-loop tracing, `arp run`/`arp trace show`, a scripted provider and real policies, research tools, citations, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
+retries, the budgeted `AgentLoop` with identical-call loop detection and
+deterministic observation shaping, a `ScriptedProvider` (canned replies,
+malformed ones included), an `OraclePolicy` and an `LLMPolicy` skeleton
+(exercised only against the scripted provider so far; no tracing or CLI yet).
+Not built yet: loop tracing, `arp run`/`arp trace show`, research tools, citations, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
 
 ## Architecture
 

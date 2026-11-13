@@ -37,11 +37,10 @@ from agentic_research.preflight import (
 )
 from agentic_research.providers.openai_compat import OpenAICompatibleProvider
 from agentic_research.providers.toolcall_json import (
-    REASON_THINK_BLOCK_PRESENT,
     ParsedFinalAnswer,
     ParsedToolCall,
     ParseFailureCounter,
-    _strip_leading_think,
+    leaked_think_reason,
     parse_toolcall_json,
 )
 from agentic_research.providers.types import ChatMessage, ChatRequest, ChatResponse, TokenUsage
@@ -393,23 +392,8 @@ def _usage_as_dict(usage: TokenUsage | None) -> dict[str, int | None] | None:
 
 
 def _think_reason_from_response(response: ChatResponse) -> str | None:
-    """Return a think-block failure reason when reasoning leaked into the reply.
-
-    Checks ``message.reasoning_content`` (llama.cpp auto/deepseek) first, then
-    a leading ``<think>`` in ``content``: a non-empty body is
-    ``think_block_present`` and a missing ``</think>`` is
-    ``think_block_unclosed``. Both fail the reply in either format, even when
-    native ``tool_calls`` are otherwise valid. Empty think tags in content are
-    not a failure (the JSON path strips them during parse).
-    """
-    reasoning = response.message.reasoning_content
-    if isinstance(reasoning, str) and reasoning.strip():
-        return REASON_THINK_BLOCK_PRESENT
-    content = response.message.content
-    if isinstance(content, str) and content:
-        _remainder, _empty, reason, _detail = _strip_leading_think(content)
-        return reason
-    return None
+    """Think-block failure reason for a reply (see `leaked_think_reason`)."""
+    return leaked_think_reason(response.message)
 
 
 def _score_base_fields(response: ChatResponse) -> dict[str, Any]:

@@ -1,4 +1,4 @@
-"""Chat providers (OpenAI-compatible local server first; ADR-0003)."""
+"""Chat providers (OpenAI-compatible local server first; ADR-0003) and the scripted provider."""
 
 from agentic_research.providers.errors import (
     LocalServerUnavailableError,
@@ -17,6 +17,14 @@ from agentic_research.providers.openai_compat import (
     parse_function_arguments,
     parse_tool_calls,
     parse_usage,
+)
+from agentic_research.providers.scripted import (
+    Script,
+    ScriptedError,
+    ScriptedFunctionCall,
+    ScriptedProvider,
+    ScriptedTurn,
+    load_script,
 )
 from agentic_research.providers.toolcall_json import (
     ParsedFinalAnswer,
@@ -52,10 +60,16 @@ __all__ = [
     "ProviderError",
     "ProviderHTTPError",
     "ProviderResponseError",
+    "Script",
+    "ScriptedError",
+    "ScriptedFunctionCall",
+    "ScriptedProvider",
+    "ScriptedTurn",
     "TokenUsage",
     "ToolCall",
     "ToolCallJsonResult",
     "base_url_from_environ",
+    "load_script",
     "model_from_environ",
     "parse_chat_completion",
     "parse_function_arguments",

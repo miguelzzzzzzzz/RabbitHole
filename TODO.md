@@ -62,7 +62,9 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] Chad M2 check 2: run deadline passed into `ToolExecutor.execute`; attempts and backoff sleeps charged to `elapsed_s` + `tool_attempts`/`backoff_s`, with tests (2026-11-11)
 - [x] Loop detection: identical (tool, normalized args) beyond a threshold gives a guardrail observation, then `failed:loop` (`agentic_research.agent.guards.LoopGuard`; 2026-11-12)
 - [x] Observation shaping: deterministic truncation of tool outputs, eliding old observations to one-line summaries (no LLM) (`agentic_research.agent.observations`, `RunState.observations`; 2026-11-12)
-- [ ] `ScriptedProvider`, `LLMPolicy` skeleton, `OraclePolicy`; tracer on every span; `arp run --provider scripted` and `arp trace show`
+- [x] `ScriptedProvider` (canned turns incl. malformed arguments/bodies and provider errors, JSON script files), `OraclePolicy`, `LLMPolicy` skeleton (native + json parsing, `parse_failures`, token charging), `PolicyFailure` -> `failed:<reason>` (2026-11-13)
+- [ ] Tracer on every span (run/step/provider_call/tool_call, incl. `parse_failure` on provider calls and per-attempt tool spans); `arp run --provider scripted --script FILE` and `arp trace show FILE`; golden two-step trace test (`tests/fixtures/scripts/two_step.json`, timings normalized)
+- [ ] Then request Chad's M2 review
 
 ## Later (from M1)
 - [ ] M5: wire `ARP_TOOL_FORMAT` from env into the agent loop (OPT-3; currently only in `.env.example`)
