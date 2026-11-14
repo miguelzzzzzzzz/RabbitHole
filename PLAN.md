@@ -10,7 +10,7 @@ unless they come from a committed report under `evals/results/`.
 | ID | Milestone | Status |
 | --- | --- | --- |
 | M1 | Scaffold, tool contracts, registry, calculator, trace schema, local runtime and tool-calling probe | done (2026-11-08; Chad re-check passed at `60e7ad9`) |
-| M2 | Agent loop, run state, budgets, timeouts/retries, scripted provider | in progress |
+| M2 | Agent loop, run state, budgets, timeouts/retries, scripted provider | implemented 2026-11-14; awaiting Chad's review |
 | M3 | Research tools on the project-01 retriever, citations, guardrails | planned |
 | M4 | Task suites, graders, eval runner, oracle and heuristic baselines | planned |
 | M5 | Local LLM policy (Qwen3-1.7B, default), call parsing/repair, optional hosted backend, record/replay, baseline run | planned |

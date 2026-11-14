@@ -27,3 +27,4 @@ htmlcov/
 
 # Hypothesis example database
 .hypothesis/
+/traces/

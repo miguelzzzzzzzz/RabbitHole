@@ -44,11 +44,16 @@ DEADLINE_REASON = "deadline_exceeded"
 
 
 class AttemptRecord(BaseModel):
-    """One run of a tool. ``backoff_s`` is the delay slept *after* it (0 if none)."""
+    """One run of a tool. ``backoff_s`` is the delay slept *after* it (0 if none).
+
+    ``started_at`` is the executor clock's reading when the attempt began, so
+    the agent loop can place each attempt in the run's trace.
+    """
 
     model_config = ConfigDict(frozen=True)
 
     attempt: int = Field(ge=1)
+    started_at: float = Field(allow_inf_nan=False)
     error: ToolError | None = None
     duration_s: float = Field(ge=0.0)
     backoff_s: float = Field(default=0.0, ge=0.0)
@@ -130,7 +135,9 @@ class ToolExecutor:
             )
             duration = max(0.0, self._clock() - started)
             if not isinstance(outcome, ToolError):
-                attempts.append(AttemptRecord(attempt=attempt, duration_s=duration))
+                attempts.append(
+                    AttemptRecord(attempt=attempt, started_at=started, duration_s=duration)
+                )
                 return ToolExecution(
                     result=ToolResult.success(name, outcome), attempts=tuple(attempts)
                 )
@@ -143,7 +150,13 @@ class ToolExecutor:
                     retry = False
                     delay = 0.0
             attempts.append(
-                AttemptRecord(attempt=attempt, error=outcome, duration_s=duration, backoff_s=delay)
+                AttemptRecord(
+                    attempt=attempt,
+                    started_at=started,
+                    error=outcome,
+                    duration_s=duration,
+                    backoff_s=delay,
+                )
             )
             if not retry:
                 return ToolExecution(

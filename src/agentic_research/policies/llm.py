@@ -21,6 +21,9 @@ call and turns the reply into one action:
 - Token usage is ``usage.total_tokens``, else prompt + completion tokens,
   else 0 when the server reported none (the soft token budget then
   undercounts; the provider-call trace span records what was reported).
+- Every call is reported as a `ProviderCallInfo` (on the `Decision`, or on
+  the `PolicyFailure` when the call failed or its reply did not parse) so the
+  loop can trace it.
 
 A reply that cannot become an action increments `parse_failures` and raises
 `PolicyFailure` with the parse reason code, so the run ends as
@@ -37,9 +40,19 @@ from typing import Final, Literal, NoReturn
 from pydantic import BaseModel
 
 from agentic_research.agent.actions import FinalAnswer, GiveUp, ToolCall
-from agentic_research.agent.policy import Decision, PolicyFailure, is_reason_code
+from agentic_research.agent.policy import (
+    Decision,
+    PolicyFailure,
+    ProviderCallInfo,
+    is_reason_code,
+)
 from agentic_research.agent.state import Observation, RunState
-from agentic_research.providers.errors import ProviderError
+from agentic_research.providers.errors import (
+    LocalServerUnavailableError,
+    ProviderError,
+    ProviderHTTPError,
+    ProviderResponseError,
+)
 from agentic_research.providers.toolcall_json import (
     REASON_EMPTY_REPLY,
     ParsedToolCall,
@@ -57,8 +70,9 @@ from agentic_research.providers.types import (
     TokenUsage,
 )
 from agentic_research.providers.types import ToolCall as WireToolCall
+from agentic_research.tools.base import ErrorClass
 from agentic_research.tools.registry import ToolRegistry
-from agentic_research.trace.schema import MAX_MESSAGE_CHARS, ParseFailure
+from agentic_research.trace.schema import MAX_MESSAGE_CHARS, ParseFailure, SpanError
 
 ToolFormat = Literal["native", "json"]
 
@@ -92,6 +106,28 @@ OBSERVATION_PREFIX: Final = "Observation: "
 
 def _compact(value: object) -> str:
     return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
+
+
+def provider_error_class(exc: ProviderError) -> ErrorClass:
+    """How a provider failure is classified on its trace span.
+
+    Only a label for the trace (provider retries are M5 work): an unreachable
+    server, HTTP 429 and 5xx are ``transient``; an unusable reply body is
+    ``bad_output``; anything else (other 4xx, exhausted scripts) is
+    ``permanent``.
+    """
+    if isinstance(exc, LocalServerUnavailableError):
+        return ErrorClass.TRANSIENT
+    if isinstance(exc, ProviderHTTPError):
+        transient = exc.status_code == 429 or exc.status_code >= 500
+        return ErrorClass.TRANSIENT if transient else ErrorClass.PERMANENT
+    if isinstance(exc, ProviderResponseError):
+        return ErrorClass.BAD_OUTPUT
+    return ErrorClass.PERMANENT
+
+
+def _non_negative(value: int | None) -> int | None:
+    return None if value is None else max(0, value)
 
 
 def charged_tokens(usage: TokenUsage | None) -> int:
@@ -187,15 +223,49 @@ class LLMPolicy:
             out.append(ChatMessage(role="user", content=OBSERVATION_PREFIX + observation.text))
         return out
 
+    def _model_label(self) -> str:
+        """The model name to trace when the reply does not name one."""
+        configured = self.model or getattr(self.provider, "model", None)
+        return configured if isinstance(configured, str) and configured else "unknown"
+
+    def _call_info(
+        self, response: ChatResponse | None = None, **outcome: object
+    ) -> ProviderCallInfo:
+        usage = response.usage if response is not None else None
+        model = response.model if response is not None and response.model else None
+        return ProviderCallInfo.model_validate(
+            {
+                "provider": self.provider.name or "unknown",
+                "model": model or self._model_label(),
+                "tool_format": self.tool_format,
+                "input_tokens": _non_negative(usage.prompt_tokens) if usage else None,
+                "output_tokens": _non_negative(usage.completion_tokens) if usage else None,
+                "finish_reason": response.finish_reason if response is not None else None,
+                **outcome,
+            }
+        )
+
     async def next_action(self, state: RunState) -> Decision:
+        """One provider call, one action; the call is reported for the trace either way."""
         request = self.build_request(state)
         try:
             response = await self.provider.complete(request)
         except ProviderError as exc:
             reason = exc.reason if is_reason_code(exc.reason) else PROVIDER_ERROR
-            raise PolicyFailure(reason, exc.message) from exc
-        action = self.parse_reply(response)
-        return Decision(action=action, tokens=charged_tokens(response.usage))
+            error = SpanError(
+                error_class=provider_error_class(exc),
+                reason=reason,
+                message=exc.message[:MAX_MESSAGE_CHARS],
+            )
+            raise PolicyFailure(reason, exc.message, calls=(self._call_info(error=error),)) from exc
+        try:
+            action = self.parse_reply(response)
+        except PolicyFailure as exc:
+            failure = ParseFailure(reason=exc.reason, detail=exc.message[:MAX_MESSAGE_CHARS])
+            info = self._call_info(response, parse_failure=failure)
+            raise PolicyFailure(exc.reason, exc.message, calls=(info,)) from exc
+        info = self._call_info(response)
+        return Decision(action=action, tokens=charged_tokens(response.usage), calls=(info,))
 
     def parse_reply(self, response: ChatResponse) -> ToolCall | FinalAnswer:
         """One action from a reply, or `PolicyFailure` (counted in `parse_failures`)."""

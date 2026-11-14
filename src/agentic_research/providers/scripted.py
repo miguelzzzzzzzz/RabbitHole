@@ -1,7 +1,7 @@
 """`ScriptedProvider`: a `ChatProvider` that replays canned completions.
 
-Used for deterministic agent runs with no model: tests and CI now, and the
-planned ``arp run --provider scripted --script FILE`` (not wired yet). Each
+Used for deterministic agent runs with no model: tests, CI and
+``arp run --provider scripted --script FILE``. Each
 call to `complete` consumes the next `ScriptedTurn`:
 
 - a *message* turn (``content``, ``tool_calls``, ``reasoning_content``,

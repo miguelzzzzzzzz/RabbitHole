@@ -45,6 +45,7 @@ from agentic_research.tools import (
     ToolOutput,
     ToolRegistry,
 )
+from agentic_research.trace import StepSpan, ToolCallSpan, dumps_trace, loads_trace
 
 TASK = Task(question="What is 6*7?")
 NO_JITTER = RetryPolicy(
@@ -596,7 +597,8 @@ def test_property_counters_stay_within_limits(
     loop, policy, _ = make_loop(
         script, budgets, tools=tools, time_=time_, verifier=RejectWrong(), loop_guard=guard
     )
-    state = asyncio.run(loop.run(TASK))
+    traced = asyncio.run(loop.run_traced(TASK))
+    state, trace = traced.state, traced.trace
 
     assert state.terminal
     c = state.counters
@@ -638,6 +640,20 @@ def test_property_counters_stay_within_limits(
         else:
             assert state.detail == "policy_error"
             assert len(policy.seen) == len(script) + 1
+
+    # The trace (already validated by `Trace`) agrees with the state.
+    step_spans = [s for s in trace.spans if isinstance(s, StepSpan)]
+    assert len(step_spans) - len(state.steps) in (0, 1)
+    assert len(step_spans) == len(policy.seen)  # one step span per policy call
+    tool_parents = {s.parent_id for s in trace.spans if isinstance(s, ToolCallSpan)}
+    ran = {f"step-{s.index}" for s in state.steps if s.result is not None}
+    assert tool_parents == ran
+    attempts = [s for s in trace.spans if isinstance(s, ToolCallSpan)]
+    assert len(attempts) >= c.tool_attempts
+    used = trace.run.budget_used
+    assert (used.steps, used.tool_calls, used.tokens) == (c.steps, c.tool_calls, c.tokens)
+    assert all(s.end_s <= trace.run.end_s for s in trace.spans)
+    assert loads_trace(dumps_trace(trace)) == trace
     assert RunState.from_json(state.to_json()) == state
 
 

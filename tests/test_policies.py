@@ -22,7 +22,7 @@ from agentic_research.agent import (
     ToolCall,
     Verdict,
 )
-from agentic_research.agent.policy import is_reason_code
+from agentic_research.agent.policy import ProviderCallInfo, is_reason_code
 from agentic_research.policies import LLMPolicy, OraclePolicy, charged_tokens
 from agentic_research.policies.llm import JSON_SYSTEM_PROMPT, NATIVE_SYSTEM_PROMPT
 from agentic_research.providers import (
@@ -349,7 +349,15 @@ async def test_next_action_returns_a_decision_with_charged_tokens() -> None:
     turn = ScriptedTurn(content="42", usage=TokenUsage(prompt_tokens=10, completion_tokens=2))
     policy = LLMPolicy(ScriptedProvider([turn]), default_registry(), model="qwen", max_tokens=64)
     decision = await policy.next_action(RunState(task=TASK))
-    assert decision == Decision(action=FinalAnswer(answer="42"), tokens=12)
+    info = ProviderCallInfo(
+        provider="scripted",
+        model="qwen",
+        tool_format="native",
+        input_tokens=10,
+        output_tokens=2,
+        finish_reason="stop",
+    )
+    assert decision == Decision(action=FinalAnswer(answer="42"), tokens=12, calls=(info,))
     request = policy.provider.requests[0]  # type: ignore[attr-defined]
     assert (request.model, request.max_tokens) == ("qwen", 64)
 

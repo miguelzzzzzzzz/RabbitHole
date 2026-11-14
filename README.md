@@ -20,8 +20,10 @@ the M2 agent core: run state, a `ToolExecutor` with timeouts and seeded
 retries, the budgeted `AgentLoop` with identical-call loop detection and
 deterministic observation shaping, a `ScriptedProvider` (canned replies,
 malformed ones included), an `OraclePolicy` and an `LLMPolicy` skeleton
-(exercised only against the scripted provider so far; no tracing or CLI yet).
-Not built yet: loop tracing, `arp run`/`arp trace show`, research tools, citations, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
+(exercised only against the scripted provider so far), a JSONL trace of every
+run (run, step, provider-call and per-attempt tool spans), and `arp run
+--provider scripted` / `arp trace show`.
+Not built yet: model-backed `arp run` providers, research tools, citations, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
 
 ## Architecture
 
@@ -38,7 +40,8 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | `OpenAICompatibleProvider` | async httpx chat completions with optional `tools`, usage, native `tool_calls` parsing (local server) | built (M1) |
 | JSON-in-text tool protocol | strict parser, `<think>` strip, reason codes, `parse_failures` counter | built (M1) |
 | Tool-calling probe | frozen 20-prompt probe picks native vs json default | built (M1); default `native` |
-| Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | M2 |
+| Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | built (M2; awaiting review) |
+| Run tracing, `arp run`, `arp trace show` | every run writes a trace v1 file; scripted provider only (no model) | built (M2; awaiting review) |
 | Research tools, citations, guardrails | `search_corpus`/`read_document` over [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0`; citations checked against exact spans; allowlists and loop detection | M3 |
 | Task suites, graders, eval runner | programmatic trajectory graders; oracle and heuristic baselines | M4 |
 | Local LLM policy, record/replay | live runs on the local model; cassettes replay in CI | M5 |
@@ -53,7 +56,17 @@ arp tools schema                  # all built-in tools, OpenAI `tools` format
 arp tools schema --tool calculator
 arp doctor                        # MemAvailable + observed serve flags + /v1/models
 arp probe tool-calls              # frozen native vs json probe (local model)
+
+# One agent run on canned replies (no model), then read its trace
+arp run --provider scripted --script tests/fixtures/scripts/two_step.json --run-id demo
+arp trace show traces/demo.jsonl
 ```
+
+`arp run` writes `traces/<run-id>.jsonl` unless `--trace-out` is given (it
+refuses to overwrite an existing file) and exits 0 when the run answered, 1
+for any other end (the trace is still written), 2 for bad input. Budgets:
+`--max-steps` (default 8), `--max-tool-calls`, `--max-tokens`, `--deadline-s`.
+Only `--provider scripted` exists; local and hosted providers arrive in M5.
 
 Local model server (dev box only; CI never runs it), see
 [docs/local-models.md](docs/local-models.md):
@@ -64,7 +77,7 @@ scripts/local_runtime.sh serve     # http://127.0.0.1:8080/v1, model Qwen3-1.7B-
 arp doctor                         # refuse a live run if memory/flags/server fail
 ```
 
-Planned commands (not built yet): `arp run`, `arp eval`, `arp trace show`.
+Planned commands (not built yet): `arp eval`.
 
 Configuration comes from environment variables, all listed with comments
 in [`.env.example`](.env.example) (secrets empty). `arp doctor` and

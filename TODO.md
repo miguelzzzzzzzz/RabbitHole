@@ -63,8 +63,9 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] Loop detection: identical (tool, normalized args) beyond a threshold gives a guardrail observation, then `failed:loop` (`agentic_research.agent.guards.LoopGuard`; 2026-11-12)
 - [x] Observation shaping: deterministic truncation of tool outputs, eliding old observations to one-line summaries (no LLM) (`agentic_research.agent.observations`, `RunState.observations`; 2026-11-12)
 - [x] `ScriptedProvider` (canned turns incl. malformed arguments/bodies and provider errors, JSON script files), `OraclePolicy`, `LLMPolicy` skeleton (native + json parsing, `parse_failures`, token charging), `PolicyFailure` -> `failed:<reason>` (2026-11-13)
-- [ ] Tracer on every span (run/step/provider_call/tool_call, incl. `parse_failure` on provider calls and per-attempt tool spans); `arp run --provider scripted --script FILE` and `arp trace show FILE`; golden two-step trace test (`tests/fixtures/scripts/two_step.json`, timings normalized)
-- [ ] Then request Chad's M2 review
+- [x] Tracer on every span (run/step/provider_call/tool_call, incl. `parse_failure` on provider calls and per-attempt tool spans); `arp run --provider scripted --script FILE` and `arp trace show FILE`; golden two-step trace test (`tests/fixtures/scripts/two_step.json` -> `tests/fixtures/traces/two_step.golden.jsonl`, timings normalized) (`agentic_research.agent.tracing`, `trace.show`; 2026-11-14)
+- [ ] Request Chad's M2 review (M2 scope and acceptance criteria are implemented; M2 closes after his review)
+- [ ] Known limits to raise with Chad: provider-call spans share the policy call's interval (one call per step in M2); a policy that times out reports no provider-call span; `arp run` checks for an existing trace file before the run, then replaces atomically (not an exclusive create)
 
 ## Later (from M1)
 - [ ] M5: wire `ARP_TOOL_FORMAT` from env into the agent loop (OPT-3; currently only in `.env.example`)

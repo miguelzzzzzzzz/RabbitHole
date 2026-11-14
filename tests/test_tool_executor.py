@@ -374,6 +374,21 @@ async def test_durations_are_measured_on_the_injected_clock() -> None:
     assert run.attempts[1].duration_s == 0.0
 
 
+async def test_attempt_start_times_are_read_from_the_injected_clock() -> None:
+    time_ = FakeTime()
+    start = time_.now
+
+    async def slow(ctx: ToolContext) -> object:
+        time_.now += 2.5
+        raise ToolFailure(ToolError(error_class=ErrorClass.TRANSIENT, reason="reset", message="x"))
+
+    tool = ScriptTool([slow, ok()], retry=NO_JITTER)
+    executor, _ = make(tool, time_)
+    run = await executor.execute("script", {}, CTX)
+    # attempt 2 starts after attempt 1's 2.5s and the 0.5s backoff
+    assert [a.started_at for a in run.attempts] == [start, start + 3.0]
+
+
 async def test_deadline_already_passed_runs_nothing() -> None:
     tool = ScriptTool([ok()])
     executor, time_ = make(tool)
