@@ -42,6 +42,7 @@ from agentic_research.providers import ToolCall as WireToolCall
 from agentic_research.tools import ToolExecutor, ToolRegistry, ToolResult
 from agentic_research.tools.builtin import default_registry
 from agentic_research.tools.calculator import CalculatorOutput
+from agentic_research.trace import ProviderCallSpan
 
 FIXTURE = Path(__file__).parent / "fixtures" / "scripts" / "two_step.json"
 TASK = Task(question="What is 6*7?")
@@ -98,6 +99,25 @@ def test_policy_failure_validates_its_reason() -> None:
     assert str(PolicyFailure("nope", "why")) == "nope: why"
     with pytest.raises(ValueError, match="invalid policy failure reason"):
         PolicyFailure("Not A Code")
+
+
+@pytest.mark.parametrize("bad", [-1, 1.5, True, "3"])
+def test_policy_failure_tokens_must_be_a_non_negative_int(bad: object) -> None:
+    assert PolicyFailure("nope").tokens == 0
+    assert PolicyFailure("nope", tokens=7).tokens == 7
+    with pytest.raises(ValueError, match="tokens"):
+        PolicyFailure("nope", tokens=bad)  # type: ignore[arg-type]
+
+
+async def test_loop_charges_the_tokens_of_a_policy_failure() -> None:
+    class Fails:
+        async def next_action(self, state: RunState) -> FinalAnswer:
+            raise PolicyFailure("invalid_json", "bad reply", tokens=120)
+
+    traced = await make_loop(Fails()).run_traced(TASK)
+    assert traced.state.terminal_label == "failed:invalid_json"
+    assert traced.state.counters.tokens == 120
+    assert traced.trace.run.budget_used.tokens == 120
 
 
 async def test_loop_ends_with_the_policy_failure_reason() -> None:
@@ -376,6 +396,41 @@ async def test_next_action_returns_a_decision_with_charged_tokens() -> None:
 )
 def test_charged_tokens(usage: TokenUsage | None, tokens: int) -> None:
     assert charged_tokens(usage) == tokens
+
+
+async def test_unparseable_reply_is_charged_to_the_token_budget() -> None:
+    # Chad's M2 MINOR-4 probe: malformed native arguments with usage 100 + 20.
+    turn = ScriptedTurn(
+        tool_calls=(ScriptedFunctionCall(name="calculator", arguments="{not json"),),
+        usage=TokenUsage(prompt_tokens=100, completion_tokens=20, total_tokens=120),
+    )
+    policy = LLMPolicy(ScriptedProvider([turn]), default_registry())
+    with pytest.raises(PolicyFailure) as caught:
+        await policy.next_action(RunState(task=TASK))
+    assert caught.value.reason == "invalid_json"
+    assert caught.value.tokens == 120
+
+    policy = LLMPolicy(ScriptedProvider([turn]), default_registry())
+    traced = await make_loop(policy).run_traced(TASK)
+    assert traced.state.terminal_label == "failed:invalid_json"
+    assert traced.state.counters.tokens == 120
+    run = traced.trace.run
+    provider_spans = [s for s in traced.trace.spans if isinstance(s, ProviderCallSpan)]
+    assert len(provider_spans) == 1
+    span = provider_spans[0]
+    assert (span.input_tokens, span.output_tokens) == (100, 20)
+    # The run span now agrees with its child instead of reporting 0.
+    assert run.budget_used.tokens == 120
+
+
+async def test_provider_error_charges_no_tokens() -> None:
+    policy = LLMPolicy(
+        ScriptedProvider([ScriptedTurn(error=ScriptedError(kind="unavailable"))]),
+        default_registry(),
+    )
+    with pytest.raises(PolicyFailure) as caught:
+        await policy.next_action(RunState(task=TASK))
+    assert caught.value.tokens == 0
 
 
 async def test_token_budget_counts_scripted_usage() -> None:

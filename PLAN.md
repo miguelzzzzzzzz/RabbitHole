@@ -220,6 +220,15 @@ Acceptance criteria
 - Hypothesis property test: for any generated scripted action sequence and
   budget config, counters never exceed limits and every run ends in a
   terminal status with no unhandled exception.
+- The property test asserts every budget invariant explicitly (ADR-0006
+  budget rules), not only the exhaustion-reason mapping, including
+  `tokens <= max_tokens + max_call_tokens` and
+  `elapsed_s <= deadline_s + DEADLINE_TOLERANCE_S` (a named constant).
+  (Added 2026-11-15 from Chad's M2 review, MAJOR-2.)
+- Deadline test: a slow verifier with a short deadline and step timeout
+  must not end `succeeded`; the run ends as `budget_exhausted:deadline`
+  (deadline binds) or `failed:verifier_timeout` (step timeout binds), and
+  the verifier time is charged. (Added 2026-11-15, MAJOR-1.)
 - A tool that sleeps past its timeout is cancelled. A retry happens only for
   retryable error classes, and attempt counts match the policy (fake clock,
   no real sleeping).

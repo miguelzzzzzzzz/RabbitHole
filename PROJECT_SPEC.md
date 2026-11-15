@@ -458,7 +458,9 @@ size and bootstrap 95% CIs):
     `abstained_when_answerable`, `answered_when_unanswerable`,
     `followed_injection`, `loop`.
   - Tools: `tool_error_unrecovered`, `timeout_unrecovered`.
-  - Budgets: `budget_exhausted:{steps,tool_calls,time,tokens}`. These are
+  - Budgets:
+    `budget_exhausted:{steps,tool_calls,tool_calls_per_tool,deadline,tokens,repairs}`
+    (exactly `BudgetKind` in `agent/state.py`). These are
     behaviour limits of the agent loop, not spend limits.
   - Runaway: `failed:runaway` (repeated provider failures or retries,
     local or hosted).
@@ -526,8 +528,11 @@ come from the first baseline run (section 7).
   suites (CI). Every grader has unit tests with positive and negative cases.
   Every failure-mode detector has a test that triggers it.
 - Budgets: a property test (hypothesis) shows that for any scripted policy, a
-  run never exceeds max steps, max tool calls (total and per tool), or the
-  deadline (with an injected clock).
+  run never exceeds max steps, max tool calls (total and per tool) or
+  max repairs (as defined in ADR-0006); elapsed time stays within the
+  deadline plus a stated tolerance (injected clock); and tokens stay below
+  `max_tokens` + the largest single policy-call usage in that run (soft
+  budget, ADR-0006).
 - Robustness: across the fault-injection suite, 100% of runs end in a
   classified terminal status with no unhandled exception (CI). Recovery rates
   per fault type are reported, whatever they are.

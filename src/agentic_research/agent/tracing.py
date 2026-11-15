@@ -25,8 +25,9 @@ Span layout:
   rejected before running it (``invalid_args``, or no time left before the
   deadline) is a zero-length attempt 1 carrying that error.
 
-Guardrail refusals (``loop_detected``) and verifier rejections
-(``answer_rejected``) are events on their step.
+Guardrail refusals (``loop_detected``), verifier rejections
+(``answer_rejected``) and an accepted answer whose verification ended at or
+after the deadline (``answer_after_deadline``) are events on their step.
 """
 
 from __future__ import annotations

@@ -1,12 +1,12 @@
 """The budgeted agent loop (ADR-0001, ADR-0006).
 
 One iteration is: budget check, policy (bounded by the step timeout and the
-run deadline), then either the verifier hook (`FinalAnswer`), abstention
-(`GiveUp`) or, for a `ToolCall`, the budget re-check, the loop guard and the
-tool executor. Each recorded step is then shaped into an observation for the
-policy (`agentic_research.agent.observations`). The loop owns every state
-transition and never raises for a policy, verifier or tool failure: each run
-ends in a terminal `RunState`.
+run deadline), then either the verifier hook (`FinalAnswer`, bounded the
+same way), abstention (`GiveUp`) or, for a `ToolCall`, the budget re-check,
+the loop guard and the tool executor. Each recorded step is then shaped into
+an observation for the policy (`agentic_research.agent.observations`). The
+loop owns every state transition and never raises for a policy, verifier or
+tool failure: each run ends in a terminal `RunState`.
 
 Budget rules:
 
@@ -15,13 +15,24 @@ Budget rules:
 - A `ToolCall` is checked again (now including the per-tool limit and any
   tokens or time the policy just used) before it runs. A refused call is
   recorded as a step without a result.
-- ``max_tokens`` is soft: usage is charged after the policy returns, so the
-  counter can pass the limit. A `FinalAnswer` or `GiveUp` from that call is
-  still honoured (it costs nothing more); a `ToolCall` is refused.
-- The run deadline is passed to the executor as an absolute time on the
-  executor's clock, so tool timeouts are shortened to it and a retry whose
-  backoff would cross it is skipped. Attempt durations and backoff sleeps
-  are charged to ``elapsed_s`` (plus ``tool_attempts``/``backoff_s``).
+- ``max_tokens`` is soft: usage is charged after the policy returns
+  (`Decision.tokens`, or `PolicyFailure.tokens` for a reply that failed to
+  parse), so the counter can pass the limit by at most one policy call's
+  usage. A `FinalAnswer` or `GiveUp` from that call is still honoured (it
+  costs nothing more); a `ToolCall` is refused.
+- The deadline is hard for everything the loop awaits. The policy call and
+  the verifier each run under ``asyncio.timeout`` of the step timeout or the
+  time left before the deadline, whichever is shorter; when the deadline is
+  the bound that fired, the run ends as ``budget_exhausted:deadline``,
+  otherwise as ``failed:policy_timeout`` / ``failed:verifier_timeout``. An
+  answer accepted by a verifier that returned at or after the deadline (on
+  the loop's clock) is not honoured: the run ends as
+  ``budget_exhausted:deadline``. The deadline is passed to the executor as an
+  absolute time on the executor's clock, so tool timeouts are shortened to
+  it and a retry whose backoff would cross it is skipped. Policy, verifier
+  and tool time, backoff sleeps included, is charged to ``elapsed_s`` (plus
+  ``tool_attempts``/``backoff_s``). Overshoot past the deadline is limited
+  to cancellation latency.
 - A rejected answer costs one repair; the run ends as
   ``budget_exhausted:repairs`` once repairs exceed ``max_repairs``.
 
@@ -75,6 +86,8 @@ POLICY_TIMEOUT = "policy_timeout"
 POLICY_ERROR = "policy_error"
 INVALID_ACTION = "invalid_action"
 VERIFIER_ERROR = "verifier_error"
+VERIFIER_TIMEOUT = "verifier_timeout"
+ANSWER_AFTER_DEADLINE = "answer_after_deadline"
 DEFAULT_LOOP_GUARD = LoopGuard()
 _RUN_ID_RE = re.compile(r"[A-Za-z0-9_.:-]{1,64}")
 
@@ -85,6 +98,7 @@ class _Stop:
     detail: str | BudgetKind
     error_class: ErrorClass = ErrorClass.PERMANENT
     message: str = ""
+    tokens: int = 0
 
 
 @dataclass(frozen=True)
@@ -99,8 +113,8 @@ class AgentLoop:
     """Runs one task to a terminal state under `Budgets`.
 
     ``max_steps`` is required so that every run terminates whatever the
-    policy does. ``step_timeout_s`` bounds each policy call; the deadline
-    bounds it too when it is closer.
+    policy does. ``step_timeout_s`` bounds each policy call and each
+    verifier call; the deadline bounds them too when it is closer.
     """
 
     def __init__(
@@ -173,18 +187,18 @@ class AgentLoop:
             decision, calls = await self._decide(state, deadline)
             rec.provider_calls(calls, policy_start, clock())
             tick()
+            state.counters.tokens += decision.tokens
             if isinstance(decision, _Stop):
                 if decision.status is RunStatus.FAILED:
                     rec.fail(decision.error_class, decision.message)
                 state.finish(decision.status, detail=decision.detail)
                 break
-            state.counters.tokens += decision.tokens
             action = decision.action
             if isinstance(action, GiveUp):
                 self._record(state, action)
                 state.finish(RunStatus.ABSTAINED, detail=action.reason)
             elif isinstance(action, FinalAnswer):
-                await self._answer(state, action, rec)
+                await self._answer(state, action, deadline, rec)
             else:
                 await self._call_tool(state, action, deadline, rec)
             tick()
@@ -205,14 +219,10 @@ class AgentLoop:
         self, state: RunState, deadline: float | None
     ) -> tuple[Decision | _Stop, tuple[ProviderCallInfo, ...]]:
         """The policy's decision (or why the run stops) and the provider calls it reported."""
-        limit = self._step_timeout_s
-        deadline_binds = False
-        if deadline is not None:
-            remaining = deadline - self._executor.clock()
-            if remaining <= 0:
-                return _Stop(RunStatus.BUDGET_EXHAUSTED, BudgetKind.DEADLINE), ()
-            if limit is None or remaining < limit:
-                limit, deadline_binds = remaining, True
+        bound = self._time_limit(deadline)
+        if bound is None:
+            return _Stop(RunStatus.BUDGET_EXHAUSTED, BudgetKind.DEADLINE), ()
+        limit, deadline_binds = bound
         try:
             async with asyncio.timeout(limit) as scope:
                 raw = await self._policy.next_action(state.model_copy(deep=True))
@@ -226,9 +236,14 @@ class AgentLoop:
             message = f"policy did not decide within {limit:g}s"
             return _Stop(RunStatus.FAILED, POLICY_TIMEOUT, ErrorClass.TIMEOUT, message), ()
         except PolicyFailure as exc:  # the policy's own classified failure
-            return _Stop(
-                RunStatus.FAILED, exc.reason, _failure_class(exc), exc.message or exc.reason
-            ), exc.calls
+            stop = _Stop(
+                RunStatus.FAILED,
+                exc.reason,
+                _failure_class(exc),
+                exc.message or exc.reason,
+                tokens=exc.tokens,
+            )
+            return stop, exc.calls
         except Exception as exc:  # a broken policy must not crash the loop
             message = f"policy raised {type(exc).__name__}"
             return _Stop(RunStatus.FAILED, POLICY_ERROR, message=message), ()
@@ -239,9 +254,46 @@ class AgentLoop:
         message = f"policy returned {type(raw).__name__}, not an action"
         return _Stop(RunStatus.FAILED, INVALID_ACTION, message=message), ()
 
-    async def _answer(self, state: RunState, action: FinalAnswer, rec: TraceRecorder) -> None:
+    def _time_limit(self, deadline: float | None) -> tuple[float | None, bool] | None:
+        """The bound for one awaited policy or verifier call.
+
+        ``(limit, deadline_binds)``: the step timeout, or the time left before
+        the deadline when that is shorter (``deadline_binds`` is then true).
+        None when no time is left.
+        """
+        limit = self._step_timeout_s
+        if deadline is None:
+            return limit, False
+        remaining = deadline - self._executor.clock()
+        if remaining <= 0:
+            return None
+        if limit is None or remaining < limit:
+            return remaining, True
+        return limit, False
+
+    async def _answer(
+        self, state: RunState, action: FinalAnswer, deadline: float | None, rec: TraceRecorder
+    ) -> None:
+        bound = self._time_limit(deadline)
+        if bound is None:  # the policy used up the deadline; the answer is not verified
+            self._record(state, action)
+            state.finish(RunStatus.BUDGET_EXHAUSTED, detail=BudgetKind.DEADLINE)
+            return
+        limit, deadline_binds = bound
         try:
-            verdict = await self._verifier.verify(action, state.model_copy(deep=True))
+            async with asyncio.timeout(limit) as scope:
+                verdict = await self._verifier.verify(action, state.model_copy(deep=True))
+        except TimeoutError:
+            self._record(state, action)
+            if not scope.expired():  # the verifier raised its own TimeoutError
+                rec.fail(ErrorClass.PERMANENT, "verifier raised TimeoutError")
+                state.finish(RunStatus.FAILED, detail=VERIFIER_ERROR)
+            elif deadline_binds:
+                state.finish(RunStatus.BUDGET_EXHAUSTED, detail=BudgetKind.DEADLINE)
+            else:
+                rec.fail(ErrorClass.TIMEOUT, f"verifier did not finish within {limit:g}s")
+                state.finish(RunStatus.FAILED, detail=VERIFIER_TIMEOUT)
+            return
         except Exception as exc:
             self._record(state, action)
             rec.fail(ErrorClass.PERMANENT, f"verifier raised {type(exc).__name__}")
@@ -253,7 +305,12 @@ class AgentLoop:
             state.finish(RunStatus.FAILED, detail=VERIFIER_ERROR)
             return
         self._record(state, action, verdict=verdict)
-        if verdict.accepted:
+        if verdict.accepted and deadline is not None and self._executor.clock() >= deadline:
+            # Accepted, but only at or after the deadline (cancellation latency, or a
+            # verifier that advanced the loop's clock without the event loop seeing it).
+            rec.step_event(ANSWER_AFTER_DEADLINE, at=None)
+            state.finish(RunStatus.BUDGET_EXHAUSTED, detail=BudgetKind.DEADLINE)
+        elif verdict.accepted:
             state.finish(RunStatus.SUCCEEDED, answer=action.answer)
         else:
             rec.step_event("answer_rejected", at=None, reason=verdict.reason)

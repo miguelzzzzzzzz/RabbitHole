@@ -57,16 +57,27 @@ class PolicyFailure(Exception):  # noqa: N818 - a classified outcome, like ToolF
     M5 work. ``reason`` must be a short lowercase code (``[a-z][a-z0-9_]*``,
     at most 64 characters) so it fits `RunState.detail`. ``calls`` are the
     provider calls made before failing, so they still reach the trace.
+    ``tokens`` is the model usage those calls consumed (for example a reply
+    that failed to parse); the loop charges it to the token budget exactly
+    like `Decision.tokens`, so a failed run's usage is not lost.
     """
 
     def __init__(
-        self, reason: str, message: str = "", *, calls: Sequence[ProviderCallInfo] = ()
+        self,
+        reason: str,
+        message: str = "",
+        *,
+        calls: Sequence[ProviderCallInfo] = (),
+        tokens: int = 0,
     ) -> None:
         if not is_reason_code(reason):
             raise ValueError(f"invalid policy failure reason {reason!r}")
+        if isinstance(tokens, bool) or not isinstance(tokens, int) or tokens < 0:
+            raise ValueError(f"policy failure tokens must be an int >= 0, not {tokens!r}")
         self.reason = reason
         self.message = message
         self.calls: tuple[ProviderCallInfo, ...] = tuple(calls)
+        self.tokens = tokens
         super().__init__(f"{reason}: {message}" if message else reason)
 
 

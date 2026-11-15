@@ -20,7 +20,8 @@ call and turns the reply into one action:
   argument models; native ``tool_calls`` in this mode are rejected.
 - Token usage is ``usage.total_tokens``, else prompt + completion tokens,
   else 0 when the server reported none (the soft token budget then
-  undercounts; the provider-call trace span records what was reported).
+  undercounts; the provider-call trace span records what was reported). A
+  reply that does not parse is charged the same way (`PolicyFailure.tokens`).
 - Every call is reported as a `ProviderCallInfo` (on the `Decision`, or on
   the `PolicyFailure` when the call failed or its reply did not parse) so the
   loop can trace it.
@@ -263,7 +264,8 @@ class LLMPolicy:
         except PolicyFailure as exc:
             failure = ParseFailure(reason=exc.reason, detail=exc.message[:MAX_MESSAGE_CHARS])
             info = self._call_info(response, parse_failure=failure)
-            raise PolicyFailure(exc.reason, exc.message, calls=(info,)) from exc
+            tokens = charged_tokens(response.usage)  # an unparseable reply still cost tokens
+            raise PolicyFailure(exc.reason, exc.message, calls=(info,), tokens=tokens) from exc
         info = self._call_info(response)
         return Decision(action=action, tokens=charged_tokens(response.usage), calls=(info,))
 

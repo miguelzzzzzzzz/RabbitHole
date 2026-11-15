@@ -64,8 +64,19 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] Observation shaping: deterministic truncation of tool outputs, eliding old observations to one-line summaries (no LLM) (`agentic_research.agent.observations`, `RunState.observations`; 2026-11-12)
 - [x] `ScriptedProvider` (canned turns incl. malformed arguments/bodies and provider errors, JSON script files), `OraclePolicy`, `LLMPolicy` skeleton (native + json parsing, `parse_failures`, token charging), `PolicyFailure` -> `failed:<reason>` (2026-11-13)
 - [x] Tracer on every span (run/step/provider_call/tool_call, incl. `parse_failure` on provider calls and per-attempt tool spans); `arp run --provider scripted --script FILE` and `arp trace show FILE`; golden two-step trace test (`tests/fixtures/scripts/two_step.json` -> `tests/fixtures/traces/two_step.golden.jsonl`, timings normalized) (`agentic_research.agent.tracing`, `trace.show`; 2026-11-14)
-- [ ] Request Chad's M2 review (M2 scope and acceptance criteria are implemented; M2 closes after his review)
-- [ ] Known limits to raise with Chad: provider-call spans share the policy call's interval (one call per step in M2); a policy that times out reports no provider-call span; `arp run` checks for an existing trace file before the run, then replaces atomically (not an exclusive create)
+- [x] Request Chad's M2 review: done, reviewed at `f36a6c4` on 2026-11-14 (0 CRITICAL, 2 MAJOR, 7 MINOR, 7 OPTIONAL)
+- [x] M2 review MAJOR-1: verifier bounded by step timeout and run deadline; `failed:verifier_timeout`; late acceptance not honoured (2026-11-15)
+- [x] M2 review MAJOR-2: virtual-time budget property test asserts deadline (`DEADLINE_TOLERANCE_S`), tokens and repairs bounds; ADR-0006/SPEC/PLAN budget rules (Bogart's patch, reconciled) (2026-11-15)
+- [x] M2 review MINOR-4: tokens of unparseable replies charged (`PolicyFailure.tokens`) (2026-11-15)
+- [ ] Ask Chad to re-check MAJOR-1/-2 (+ MINOR-4); M2 closes after his re-check
+- [ ] M2 review MINOR-1 (before M4): `arp run` publishes the trace without clobbering (`os.link` or `open(..., "x")`), exit 2 on a lost race, mid-run test; fix README/CHANGELOG "never overwritten" wording
+- [ ] M2 review MINOR-2 (before M5/M6): provider-call span (and tokens, if known) for a policy call cancelled by timeout
+- [ ] M2 review MINOR-3 (before M4/M5 latency): `started_at`/`ended_at` on `ProviderCallInfo`
+- [ ] M2 review MINOR-5: `run_config` (seed, all limits, step timeout) and `budget_counters` events in the trace; `backoff_s` on failed attempt spans
+- [ ] M2 review MINOR-6: schedule R-2 (and R-1) as M5 prerequisites in PLAN.md
+- [ ] M2 review MINOR-7: `.env.example` budget sentence vs CLI flags
+- [ ] M2 review OPT-1..OPT-7 (optional; see Chad's review)
+- [x] Known limits raised with Chad (he classified them as MINOR-3, MINOR-2, MINOR-1): provider-call spans share the policy call's interval (one call per step in M2); a policy that times out reports no provider-call span; `arp run` checks for an existing trace file before the run, then replaces atomically (not an exclusive create)
 
 ## Later (from M1)
 - [ ] M5: wire `ARP_TOOL_FORMAT` from env into the agent loop (OPT-3; currently only in `.env.example`)

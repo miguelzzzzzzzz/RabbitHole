@@ -40,8 +40,8 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | `OpenAICompatibleProvider` | async httpx chat completions with optional `tools`, usage, native `tool_calls` parsing (local server) | built (M1) |
 | JSON-in-text tool protocol | strict parser, `<think>` strip, reason codes, `parse_failures` counter | built (M1) |
 | Tool-calling probe | frozen 20-prompt probe picks native vs json default | built (M1); default `native` |
-| Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | built (M2; awaiting review) |
-| Run tracing, `arp run`, `arp trace show` | every run writes a trace v1 file; scripted provider only (no model) | built (M2; awaiting review) |
+| Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | built (M2; review fixes in, awaiting re-check) |
+| Run tracing, `arp run`, `arp trace show` | every run writes a trace v1 file; scripted provider only (no model) | built (M2; review fixes in, awaiting re-check) |
 | Research tools, citations, guardrails | `search_corpus`/`read_document` over [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0`; citations checked against exact spans; allowlists and loop detection | M3 |
 | Task suites, graders, eval runner | programmatic trajectory graders; oracle and heuristic baselines | M4 |
 | Local LLM policy, record/replay | live runs on the local model; cassettes replay in CI | M5 |

@@ -1,9 +1,18 @@
 """AgentLoop: one test per budget kind, deadline-aware retries, failure paths.
 
-Time is a fake clock shared by the executor and the loop: tools advance it by
-a fixed cost per attempt and the sleeper advances it by each backoff, so no
-test waits for backoff in real time. Only the policy-timeout tests use real
-(short) waits, because ``asyncio.timeout`` runs on the event loop's clock.
+Three kinds of time are used:
+
+- A fake clock (`FakeTime`) shared by the executor and the loop: tools
+  advance it by a fixed cost per attempt and the sleeper by each backoff, so
+  no test waits for backoff in real time. ``asyncio.timeout`` cannot cancel
+  such a tool (it runs on the event loop's clock), so these tests only check
+  counting, not cancellation.
+- Virtual time (`virtual_time.VirtualTimeLoop`): the event loop's own clock
+  jumps to each due timer, so tools, policies and verifiers ``await
+  asyncio.sleep`` and the loop's real ``asyncio.timeout`` cancels them at the
+  exact deadline, with no real waiting. The deadline tests and the budget
+  property test use it.
+- A few real-clock tests with short waits, for the real event loop.
 """
 
 from __future__ import annotations
@@ -11,7 +20,8 @@ from __future__ import annotations
 import asyncio
 import time
 from collections.abc import Sequence
-from typing import Any
+from dataclasses import dataclass
+from typing import Any, ClassVar
 
 import pytest
 from hypothesis import HealthCheck, given, settings
@@ -27,6 +37,7 @@ from agentic_research.agent import (
     LoopGuard,
     ObservationShaper,
     Policy,
+    PolicyFailure,
     RunState,
     RunStatus,
     Task,
@@ -46,11 +57,22 @@ from agentic_research.tools import (
     ToolRegistry,
 )
 from agentic_research.trace import StepSpan, ToolCallSpan, dumps_trace, loads_trace
+from virtual_time import loop_clock, run_virtual
 
 TASK = Task(question="What is 6*7?")
 NO_JITTER = RetryPolicy(
     max_attempts=4, initial_backoff_s=0.5, multiplier=2.0, max_backoff_s=8.0, jitter=0.0
 )
+#: How far past the deadline a virtual-time run may end. Cancellation is
+#: instantaneous on virtual time, so only float rounding of ``start +
+#: deadline_s`` and ``clock() - start`` is left (ADR-0006: overshoot is bounded
+#: by cancellation latency).
+DEADLINE_TOLERANCE_S = 1e-9
+#: Real-clock tests: generous bound on wall time for a run whose deadline or
+#: step timeout is a few tens of milliseconds (CI scheduling noise included).
+REAL_CLOCK_SLACK_S = 5.0
+#: A wait that never finishes within any budget used here.
+HANG_S = 3600.0
 
 
 class FakeTime:
@@ -161,6 +183,70 @@ def make_loop(
         shaper=shaper,
     )
     return loop, policy, time_
+
+
+class SleepTool:
+    """Virtual time: each attempt sleeps ``cost`` (cancellable); fails the first ``failures``."""
+
+    description = "sleeping tool"
+    args_model: type[ToolArgs] = NoArgs
+    output_model: type[ToolOutput] = Out
+    idempotent = True
+
+    def __init__(
+        self, name: str, *, cost: float, failures: int = 0, timeout_s: float = 30.0
+    ) -> None:
+        self.name = name
+        self.retry = NO_JITTER
+        self.timeout_s = timeout_s
+        self._cost = cost
+        self._failures = failures
+        self.contexts: list[ToolContext] = []
+
+    async def run(self, args: NoArgs, ctx: ToolContext) -> Out:
+        self.contexts.append(ctx)
+        await asyncio.sleep(self._cost)
+        if len(self.contexts) <= self._failures:
+            raise ToolFailure(
+                ToolError(error_class=ErrorClass.TRANSIENT, reason="reset", message="x")
+            )
+        return Out(value=42)
+
+
+class SleepyVerifier:
+    """Sleeps ``delay`` (on the event loop's clock), then accepts or rejects."""
+
+    def __init__(self, delay: float, *, accept: bool = True) -> None:
+        self._delay = delay
+        self._accept = accept
+        self.calls = 0
+
+    async def verify(self, answer: FinalAnswer, state: RunState) -> Verdict:
+        self.calls += 1
+        await asyncio.sleep(self._delay)
+        return Verdict.accept() if self._accept else Verdict.reject("bad_answer", "again")
+
+
+def v_loop(
+    policy: Policy,
+    budgets: Budgets,
+    tools: Sequence[SleepTool] = (),
+    *,
+    verifier: Verifier | None = None,
+    step_timeout_s: float | None = None,
+    loop_guard: LoopGuard | None = DEFAULT_GUARD,
+) -> AgentLoop:
+    """A loop whose executor, budgets and timeouts all use the event loop's clock."""
+    executor = ToolExecutor(ToolRegistry(tools), clock=loop_clock, sleeper=asyncio.sleep)
+    return AgentLoop(
+        policy,
+        executor,
+        budgets,
+        verifier=verifier,
+        step_timeout_s=step_timeout_s,
+        run_id="r-test",
+        loop_guard=loop_guard,
+    )
 
 
 CALL = ToolCall(tool="a")
@@ -274,16 +360,17 @@ async def test_tool_calls_per_tool_budget() -> None:
     assert len(tools[0].contexts) == 2
 
 
-async def test_deadline_budget() -> None:
-    time_ = FakeTime()
-    tool = CostTool("a", time_, cost=1.0)
-    loop, _, _ = make_loop(
-        [CALL] * 10, Budgets(max_steps=10, deadline_s=2.5), tools=[tool], time_=time_
-    )
-    state = await loop.run(TASK)
+def test_deadline_budget() -> None:
+    # Virtual time: two 1 s calls finish; the third is cancelled at 2.5 s.
+    tool = SleepTool("a", cost=1.0)
+    loop = v_loop(ScriptedPolicy([CALL] * 10), Budgets(max_steps=10, deadline_s=2.5), [tool])
+    state = run_virtual(loop.run(TASK))
     assert state.terminal_label == "budget_exhausted:deadline"
     assert state.counters.tool_calls == 3
-    assert state.counters.elapsed_s == pytest.approx(3.0)
+    assert state.counters.elapsed_s == pytest.approx(2.5)
+    third = state.steps[2].result
+    assert third is not None and third.error is not None
+    assert third.error.reason == "deadline_exceeded"
 
 
 async def test_tokens_budget() -> None:
@@ -516,6 +603,170 @@ async def test_verifier_returning_garbage_fails_the_run() -> None:
     assert state.terminal_label == "failed:verifier_error"
 
 
+# ---- Chad's M2 MAJOR-1: the verifier is bounded by the step timeout and deadline ---
+
+
+def test_slow_verifier_past_the_step_timeout_fails_the_run() -> None:
+    # Chad's probe: a 1.5 s verifier with a 0.3 s deadline and a 0.2 s step
+    # timeout used to end `succeeded` at 1.5 s.
+    verifier = SleepyVerifier(1.5)
+    loop = v_loop(
+        ScriptedPolicy([ANSWER]),
+        Budgets(max_steps=3, deadline_s=0.3),
+        verifier=verifier,
+        step_timeout_s=0.2,
+    )
+    traced = run_virtual(loop.run_traced(TASK))
+    state = traced.state
+    assert state.terminal_label == "failed:verifier_timeout"
+    assert state.counters.elapsed_s == pytest.approx(0.2)  # the verifier's time is charged
+    assert len(state.steps) == 1 and state.steps[0].verdict is None
+    error = traced.trace.run.error
+    assert error is not None and error.error_class is ErrorClass.TIMEOUT
+
+
+@pytest.mark.parametrize("step_timeout_s", [None, 0.2])
+def test_slow_verifier_past_the_deadline_exhausts_it(step_timeout_s: float | None) -> None:
+    loop = v_loop(
+        ScriptedPolicy([ANSWER]),
+        Budgets(max_steps=3, deadline_s=0.15),
+        verifier=SleepyVerifier(1.5),
+        step_timeout_s=step_timeout_s,
+    )
+    traced = run_virtual(loop.run_traced(TASK))
+    state = traced.state
+    assert state.terminal_label == "budget_exhausted:deadline"
+    assert state.counters.elapsed_s == pytest.approx(0.15)
+    assert state.steps[0].verdict is None
+    assert traced.trace.run.error is None
+
+
+def test_deadline_left_after_a_slow_policy_bounds_the_verifier() -> None:
+    # The policy uses 0.7 s of a 1.0 s deadline, so the verifier gets only 0.3 s.
+    class SlowPolicy:
+        async def next_action(self, state: RunState) -> Scripted:
+            await asyncio.sleep(0.7)
+            return ANSWER
+
+    loop = v_loop(SlowPolicy(), Budgets(max_steps=3, deadline_s=1.0), verifier=SleepyVerifier(2))
+    state = run_virtual(loop.run(TASK))
+    assert state.terminal_label == "budget_exhausted:deadline"
+    assert state.counters.elapsed_s == pytest.approx(1.0)
+
+
+def test_verifier_time_is_charged_to_the_run() -> None:
+    loop = v_loop(
+        ScriptedPolicy([ANSWER]), Budgets(max_steps=3, deadline_s=5.0), verifier=SleepyVerifier(0.4)
+    )
+    state = run_virtual(loop.run(TASK))
+    assert state.terminal_label == "succeeded"
+    assert state.counters.elapsed_s == pytest.approx(0.4)
+
+
+def test_slow_rejections_use_up_the_deadline() -> None:
+    # Each rejection takes 0.4 s; the third verification is cut at 1.0 s.
+    loop = v_loop(
+        ScriptedPolicy([FinalAnswer(answer="wrong")] * 5),
+        Budgets(max_steps=10, deadline_s=1.0),
+        verifier=SleepyVerifier(0.4, accept=False),
+    )
+    state = run_virtual(loop.run(TASK))
+    assert state.terminal_label == "budget_exhausted:deadline"
+    assert state.counters.repairs == 2
+    assert [s.verdict is None for s in state.steps] == [False, False, True]
+    assert state.counters.elapsed_s == pytest.approx(1.0)
+
+
+async def test_answer_after_the_policy_used_up_the_deadline_is_not_verified() -> None:
+    time_ = FakeTime()
+
+    class Slow:
+        async def next_action(self, state: RunState) -> Scripted:
+            time_.now += 5.0
+            return ANSWER
+
+    verifier = SleepyVerifier(0.0)
+    loop = AgentLoop(
+        Slow(),
+        ToolExecutor(ToolRegistry(), clock=time_.clock),
+        Budgets(max_steps=3, deadline_s=1.0),
+        verifier=verifier,
+    )
+    state = await loop.run(TASK)
+    assert state.terminal_label == "budget_exhausted:deadline"
+    assert verifier.calls == 0
+    assert len(state.steps) == 1 and state.steps[0].verdict is None
+
+
+async def test_answer_accepted_only_after_the_deadline_is_not_honoured() -> None:
+    # A verifier that moves the loop's clock past the deadline without the
+    # event loop noticing (or returns within cancellation latency of it).
+    time_ = FakeTime()
+
+    class LateAccept:
+        async def verify(self, answer: FinalAnswer, state: RunState) -> Verdict:
+            time_.now += 5.0
+            return Verdict.accept()
+
+    loop, _, _ = make_loop(
+        [ANSWER], Budgets(max_steps=3, deadline_s=1.0), time_=time_, verifier=LateAccept()
+    )
+    traced = await loop.run_traced(TASK)
+    state = traced.state
+    assert state.terminal_label == "budget_exhausted:deadline"
+    assert state.answer is None
+    assert state.steps[0].verdict == Verdict.accept()  # the verdict is still recorded
+    step = next(s for s in traced.trace.spans if isinstance(s, StepSpan))
+    assert [e.name for e in step.events] == ["answer_after_deadline"]
+
+
+@pytest.mark.parametrize("step_timeout_s", [None, 60.0])
+async def test_verifier_raising_its_own_timeout_error_is_a_verifier_error(
+    step_timeout_s: float | None,
+) -> None:
+    class OwnTimeout:
+        async def verify(self, answer: FinalAnswer, state: RunState) -> Verdict:
+            raise TimeoutError("upstream index timed out")
+
+    loop, _, _ = make_loop(
+        [ANSWER], Budgets(max_steps=3), verifier=OwnTimeout(), step_timeout_s=step_timeout_s
+    )
+    traced = await loop.run_traced(TASK)
+    assert traced.state.terminal_label == "failed:verifier_error"
+    error = traced.trace.run.error
+    assert error is not None and error.error_class is ErrorClass.PERMANENT
+
+
+class HangingVerifier:
+    async def verify(self, answer: FinalAnswer, state: RunState) -> Verdict:
+        await asyncio.sleep(HANG_S)
+        raise AssertionError("unreachable")
+
+
+@pytest.mark.parametrize(
+    ("budgets", "step_timeout_s", "label"),
+    [
+        (Budgets(max_steps=3, deadline_s=0.05), 60.0, "budget_exhausted:deadline"),
+        (Budgets(max_steps=3, deadline_s=60.0), 0.02, "failed:verifier_timeout"),
+        (Budgets(max_steps=3), 0.02, "failed:verifier_timeout"),
+    ],
+)
+async def test_hanging_verifier_on_the_real_clock(
+    budgets: Budgets, step_timeout_s: float, label: str
+) -> None:
+    loop = AgentLoop(
+        ScriptedPolicy([ANSWER]),
+        ToolExecutor(ToolRegistry()),
+        budgets,
+        verifier=HangingVerifier(),
+        step_timeout_s=step_timeout_s,
+    )
+    started = time.monotonic()
+    state = await loop.run(TASK)
+    assert state.terminal_label == label
+    assert time.monotonic() - started < REAL_CLOCK_SLACK_S
+
+
 async def test_outer_cancellation_propagates() -> None:
     loop = AgentLoop(Hang(), ToolExecutor(ToolRegistry()), Budgets(max_steps=3))
     task = asyncio.ensure_future(loop.run(TASK))
@@ -554,18 +805,83 @@ def test_scripted_policy_satisfies_the_protocol() -> None:
     _v: Verifier = RejectWrong()
 
 
-# ---- property: counters never pass their limits; every run ends terminal ----------
+# ---- property: every budget invariant holds; every run ends terminal ---------------
+#
+# Virtual time, so tools, policies and verifiers really sleep and are really
+# cancelled by the loop's timeouts. The strategy includes slow and hanging
+# policy calls, slow and hanging verifiers, a tool that always times out, and
+# unparseable replies that still used tokens (Chad's M2 MAJOR-2 and MINOR-4).
 
-_ACTIONS: st.SearchStrategy[Scripted] = st.one_of(
-    st.sampled_from(["a", "b", "flaky", "missing"]).map(lambda t: ToolCall(tool=t)),
-    st.just(FinalAnswer(answer="wrong")),
-    st.just(ANSWER),
+
+@dataclass(frozen=True)
+class Fails:
+    """A scripted policy failure (an unparseable reply) that still used ``tokens``."""
+
+    tokens: int
+
+
+@dataclass(frozen=True)
+class Timed:
+    """A scripted policy step: wait ``delay`` seconds, then act (or fail)."""
+
+    item: Scripted | Fails
+    delay: float
+
+
+class TimedPolicy:
+    """Plays `Timed` steps in order; raises IndexError when it runs out.
+
+    ``charged`` records the tokens of every call that completed (one that was
+    cancelled mid-sleep never reports usage), i.e. what the loop must charge.
+    """
+
+    def __init__(self, items: Sequence[Timed]) -> None:
+        self._items = list(items)
+        self.seen: list[RunState] = []
+        self.charged: list[int] = []
+
+    async def next_action(self, state: RunState) -> Scripted:
+        self.seen.append(state)
+        timed = self._items[len(self.seen) - 1]
+        await asyncio.sleep(timed.delay)
+        item = timed.item
+        if isinstance(item, Fails):
+            self.charged.append(item.tokens)
+            raise PolicyFailure("invalid_json", "unparseable reply", tokens=item.tokens)
+        self.charged.append(item.tokens if isinstance(item, Decision) else 0)
+        return item
+
+
+class TimedVerifier:
+    """Verification time depends on the answer; ``wrong`` is rejected."""
+
+    DELAYS: ClassVar[dict[str, float]] = {"42": 0.0, "wrong": 0.1, "slow": 0.4, "hang": HANG_S}
+
+    async def verify(self, answer: FinalAnswer, state: RunState) -> Verdict:
+        await asyncio.sleep(self.DELAYS[answer.answer])
+        if answer.answer == "wrong":
+            return Verdict.reject("bad_answer", "try again")
+        return Verdict.accept()
+
+
+_TOOL_CALLS = st.sampled_from(["a", "b", "flaky", "slow", "missing"]).map(
+    lambda t: ToolCall(tool=t)
+)
+_ACTIONS: st.SearchStrategy[ToolCall | FinalAnswer | GiveUp] = st.one_of(
+    _TOOL_CALLS,
+    _TOOL_CALLS,
+    _TOOL_CALLS,
+    st.sampled_from(sorted(TimedVerifier.DELAYS)).map(lambda a: FinalAnswer(answer=a)),
     st.just(GiveUp(reason="stuck")),
 )
-_SCRIPTED = st.one_of(
-    _ACTIONS,
-    st.builds(Decision, action=_ACTIONS, tokens=st.integers(min_value=0, max_value=50)),
+_TOKENS = st.integers(min_value=0, max_value=50)
+_DECISIONS = st.builds(Decision, action=_ACTIONS, tokens=_TOKENS)
+# Failures and hangs end a run at once, so they are drawn less often than actions.
+_ITEMS: st.SearchStrategy[Scripted | Fails] = st.one_of(
+    _ACTIONS, _ACTIONS, _DECISIONS, _DECISIONS, st.builds(Fails, tokens=_TOKENS)
 )
+_DELAYS = st.sampled_from([0.0, 0.0, 0.0, 0.1, 0.1, 0.5, HANG_S])
+_TIMED = st.builds(Timed, item=_ITEMS, delay=_DELAYS)
 _OPT = st.none() | st.integers(min_value=1, max_value=6)
 _BUDGETS = st.builds(
     Budgets,
@@ -578,38 +894,60 @@ _BUDGETS = st.builds(
 )
 
 
-@settings(max_examples=150, deadline=None, suppress_health_check=[HealthCheck.too_slow])
+@settings(max_examples=300, deadline=None, suppress_health_check=[HealthCheck.too_slow])
 @given(
-    script=st.lists(_SCRIPTED, max_size=15),
+    script=st.lists(_TIMED, min_size=1, max_size=15),
     budgets=_BUDGETS,
+    step_timeout_s=st.none() | st.floats(min_value=0.05, max_value=2.0),
     max_identical=st.none() | st.integers(min_value=1, max_value=4),
 )
-def test_property_counters_stay_within_limits(
-    script: list[Scripted], budgets: Budgets, max_identical: int | None
+def test_property_budget_invariants_hold(
+    script: list[Timed],
+    budgets: Budgets,
+    step_timeout_s: float | None,
+    max_identical: int | None,
 ) -> None:
-    time_ = FakeTime()
     tools = [
-        CostTool("a", time_, cost=0.3),
-        CostTool("b", time_, cost=0.05),
-        CostTool("flaky", time_, cost=0.2, failures=2),
+        SleepTool("a", cost=0.3),
+        SleepTool("b", cost=0.05),
+        SleepTool("flaky", cost=0.2, failures=2),
+        SleepTool("slow", cost=5.0, timeout_s=1.0),  # always times out, then retries
     ]
     guard = None if max_identical is None else LoopGuard(max_identical_calls=max_identical)
-    loop, policy, _ = make_loop(
-        script, budgets, tools=tools, time_=time_, verifier=RejectWrong(), loop_guard=guard
+    policy = TimedPolicy(script)
+    loop = v_loop(
+        policy,
+        budgets,
+        tools,
+        verifier=TimedVerifier(),
+        step_timeout_s=step_timeout_s,
+        loop_guard=guard,
     )
-    traced = asyncio.run(loop.run_traced(TASK))
+    traced = run_virtual(loop.run_traced(TASK))
     state, trace = traced.state, traced.trace
 
     assert state.terminal
     c = state.counters
     assert c.steps == len(state.steps)
+
+    # Hard limits: never passed (ADR-0006 limit semantics).
     assert budgets.max_steps is not None and c.steps <= budgets.max_steps
     if budgets.max_tool_calls is not None:
         assert c.tool_calls <= budgets.max_tool_calls
     if budgets.max_tool_calls_per_tool is not None:
         assert all(n <= budgets.max_tool_calls_per_tool for n in c.per_tool.values())
+    # max_repairs counts repairs allowed: the rejection after the last allowed one ends the run.
     if budgets.max_repairs is not None:
         assert c.repairs <= budgets.max_repairs + 1
+    # The deadline is hard for policy calls, tool attempts, backoff and the verifier.
+    if budgets.deadline_s is not None:
+        assert c.elapsed_s <= budgets.deadline_s + DEADLINE_TOLERANCE_S
+    # Tokens: every completed policy call is charged, unparseable replies included...
+    assert c.tokens == sum(policy.charged)
+    # ...and the soft budget is passed by at most the largest single call's usage.
+    if budgets.max_tokens is not None:
+        assert c.tokens <= budgets.max_tokens + max(policy.charged, default=0)
+
     assert c.tool_attempts == sum(len(t.contexts) for t in tools)
     assert c.tool_calls == sum(1 for s in state.steps if s.result is not None)
     if state.status is RunStatus.BUDGET_EXHAUSTED:
@@ -623,6 +961,9 @@ def test_property_counters_stay_within_limits(
             BudgetKind.REPAIRS: budgets.max_repairs,
         }[BudgetKind(state.detail)]
         assert limit is not None
+    if state.status is RunStatus.SUCCEEDED:
+        last = state.steps[-1]
+        assert last.verdict is not None and last.verdict.accepted
     for tool in tools:  # no identical call runs more often than the guard allows
         if max_identical is not None:
             assert len([s for s in state.steps if s.result and s.result.tool == tool.name]) <= (
@@ -632,12 +973,18 @@ def test_property_counters_stay_within_limits(
     assert observed == sorted(set(observed))
     assert sum(not o.elided for o in state.observations) <= 3
     if state.status is RunStatus.FAILED:
-        # Besides the script running out, the only failure is an ignored loop guardrail.
-        if state.detail == "loop":
+        if state.detail == "loop":  # an ignored loop guardrail
             assert max_identical is not None
             last = state.steps[-1]
             assert last.guardrail is not None and last.result is None
-        else:
+        elif state.detail in ("policy_timeout", "verifier_timeout"):
+            assert step_timeout_s is not None
+            if state.detail == "verifier_timeout":
+                last = state.steps[-1]
+                assert isinstance(last.action, FinalAnswer) and last.verdict is None
+        elif state.detail == "invalid_json":
+            assert isinstance(script[len(policy.seen) - 1].item, Fails)
+        else:  # the script ran out
             assert state.detail == "policy_error"
             assert len(policy.seen) == len(script) + 1
 

@@ -26,6 +26,44 @@ most 5 tools") are not enforcement.
   ends the run as `failed:loop`. The budget re-check runs first.
 - **Injectable clock and sleeper**, so all of this is unit- and
   property-tested without real waiting.
+- **Budget rules** (amendment 2026-11-15, from Chad's M2 review MAJOR-1/-2
+  and MINOR-4; text drafted by Bogart, reconciled with
+  `agentic_research.agent.state` and `agent/loop.py`). The budget kinds are
+  exactly `BudgetKind`: `steps`, `tool_calls`, `tool_calls_per_tool`,
+  `deadline`, `tokens`, `repairs`; exhaustion ends the run as
+  `budget_exhausted:<kind>`.
+  - **Limit semantics.** A budget is exhausted once its counter reaches the
+    limit (`max_steps=3` allows 3 steps). Two exceptions:
+    - `max_repairs` counts repairs *allowed*: it is exhausted once
+      `repairs > max_repairs`, so `max_repairs=2` permits 2 repairs and the
+      3rd rejection ends the run as `budget_exhausted:repairs`. In M2 a
+      repair is a verifier rejection of a `FinalAnswer`. M5's single
+      malformed-call repair is a separate thing, counted in
+      `parse_failures` before and after repair, not in this budget.
+    - `max_tokens` is **soft**. Usage is only known after a model call
+      returns, so it is charged afterwards (`usage.total_tokens`, else
+      prompt + completion, else 0 and the provider-call span records what
+      the server reported). Replies that fail to parse are charged too
+      (`PolicyFailure.tokens`). The counter may therefore pass the limit by
+      at most one policy call's usage. When it has, a `FinalAnswer` or
+      `GiveUp` from that same call is honoured, since it costs nothing
+      more, and a `ToolCall` is refused. The next budget check ends the run
+      as `budget_exhausted:tokens`. A policy call cancelled by a timeout
+      reports no usage, so it is not charged (Chad's M2 MINOR-2, open).
+  - **The deadline is hard for everything the loop awaits**: policy calls,
+    tool attempts, backoff sleeps and the verifier. The policy and the
+    verifier each run under `asyncio.timeout` of the step timeout or the
+    time left before the deadline, whichever is shorter; tools get the
+    deadline from the executor. When the deadline is the bound that fired,
+    the run ends as `budget_exhausted:deadline`; when the step timeout
+    fired first, as `failed:policy_timeout` or `failed:verifier_timeout`
+    (error class `timeout`). An answer the verifier accepted at or after
+    the deadline (on the loop's clock) is not honoured: the run ends as
+    `budget_exhausted:deadline` with an `answer_after_deadline` step event.
+    All of this time is charged to `elapsed_s`. Overshoot past the deadline
+    is limited to cancellation latency; the property test runs on a virtual
+    event-loop clock, where that latency is zero, and states its tolerance
+    as the named constant `DEADLINE_TOLERANCE_S` (float rounding only).
 
 ## Alternatives considered
 - **Thread-pool timeouts**: threads cannot be cancelled, so work would leak.
