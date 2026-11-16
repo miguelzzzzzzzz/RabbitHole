@@ -63,7 +63,8 @@ arp trace show traces/demo.jsonl
 ```
 
 `arp run` writes `traces/<run-id>.jsonl` unless `--trace-out` is given (it
-refuses to overwrite an existing file) and exits 0 when the run answered, 1
+refuses to start if that file already exists; a file created there while the
+run is going is replaced, see M2 MINOR-1 in TODO.md) and exits 0 when the run answered, 1
 for any other end (the trace is still written), 2 for bad input. Budgets:
 `--max-steps` (default 8), `--max-tool-calls`, `--max-tokens`, `--deadline-s`.
 Only `--provider scripted` exists; local and hosted providers arrive in M5.

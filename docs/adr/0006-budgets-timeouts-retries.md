@@ -49,7 +49,9 @@ most 5 tools") are not enforcement.
       `GiveUp` from that same call is honoured, since it costs nothing
       more, and a `ToolCall` is refused. The next budget check ends the run
       as `budget_exhausted:tokens`. A policy call cancelled by a timeout
-      reports no usage, so it is not charged (Chad's M2 MINOR-2, open).
+      reports no usage, so it is not charged (Chad's M2 MINOR-2, open),
+      unless it still returns a `Decision` or raises `PolicyFailure` after
+      the cancellation; that usage is charged (see below).
   - **The deadline is hard for everything the loop awaits**: policy calls,
     tool attempts, backoff sleeps and the verifier. The policy and the
     verifier each run under `asyncio.timeout` of the step timeout or the
@@ -64,6 +66,18 @@ most 5 tools") are not enforcement.
     is limited to cancellation latency; the property test runs on a virtual
     event-loop clock, where that latency is zero, and states its tolerance
     as the named constant `DEADLINE_TOLERANCE_S` (float rounding only).
+  - **A fired time limit is final** (2026-11-16, Chad's M2 re-check N-1).
+    After a policy, verifier or tool attempt's `asyncio.timeout` has fired,
+    its outcome never counts: one that catches the cancellation and then
+    returns, or raises anything else, is the same timeout as one that let
+    the cancellation through (`budget_exhausted:deadline`,
+    `failed:policy_timeout`/`failed:verifier_timeout`, or the tool's
+    `tool_timeout`/deadline error). The loop checks `scope.expired()` after
+    every timed call, not only on `TimeoutError`, and records a
+    `late_result_ignored` step event with what came back. A call that
+    swallows the cancellation and keeps running is not cancelled again, so
+    the deadline overshoot is bounded only for code that lets
+    `CancelledError` propagate.
 
 ## Alternatives considered
 - **Thread-pool timeouts**: threads cannot be cancelled, so work would leak.

@@ -8,7 +8,10 @@ record the loop can put into the trace (ADR-0006).
   call is never run and never retried.
 * Each attempt runs under ``asyncio.timeout`` (the tool's ``timeout_s``,
   shortened to the time left before an optional ``deadline``). A tool that
-  overruns is cancelled and reported as ``timeout``.
+  overruns is cancelled and reported as ``timeout``. Once the timeout has
+  fired the attempt is a timeout whatever the tool does next: an output it
+  returns after swallowing the cancellation, or a different error it raises,
+  is discarded.
 * Only ``transient`` and ``timeout`` failures that the tool's
   :class:`RetryPolicy` allows are retried. Backoff delays come from a seeded
   RNG, so a run is reproducible, and pass through an injectable sleeper; the
@@ -179,27 +182,38 @@ class ToolExecutor:
                 raw = await tool.run(args, ctx)
         except TimeoutError:
             if scope.expired():
-                if clamped:
-                    return _deadline_error(name)
-                return ToolError(
-                    error_class=ErrorClass.TIMEOUT,
-                    reason="tool_timeout",
-                    message=f"tool {name!r} did not finish within {tool.timeout_s:g}s",
-                )
+                return _timeout_error(name, tool.timeout_s, clamped)
             return ToolError(
                 error_class=ErrorClass.TIMEOUT,
                 reason="upstream_timeout",
                 message=f"tool {name!r} reported a timeout from a service it called",
             )
         except ToolFailure as failure:
+            if scope.expired():  # raised after the attempt was cancelled
+                return _timeout_error(name, tool.timeout_s, clamped)
             return failure.error
         except Exception as exc:  # a crashing tool must not crash the agent loop
+            if scope.expired():  # e.g. caught the cancellation, then raised something else
+                return _timeout_error(name, tool.timeout_s, clamped)
             return ToolError(
                 error_class=ErrorClass.PERMANENT,
                 reason="tool_crashed",
                 message=f"tool {name!r} raised {type(exc).__name__}",
             )
+        if scope.expired():  # the tool swallowed the cancellation and returned anyway
+            return _timeout_error(name, tool.timeout_s, clamped)
         return self._registry.validate_output(name, raw)
+
+
+def _timeout_error(name: str, timeout_s: float, clamped: bool) -> ToolError:
+    """The error for an attempt whose time limit fired."""
+    if clamped:
+        return _deadline_error(name)
+    return ToolError(
+        error_class=ErrorClass.TIMEOUT,
+        reason="tool_timeout",
+        message=f"tool {name!r} did not finish within {timeout_s:g}s",
+    )
 
 
 def _deadline_error(name: str) -> ToolError:

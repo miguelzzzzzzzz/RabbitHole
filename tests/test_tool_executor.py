@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import random
 from collections.abc import Awaitable, Callable, Sequence
 from typing import Any
@@ -437,6 +438,60 @@ async def test_timeout_is_shortened_to_the_deadline_and_not_retried() -> None:
     assert time_.sleeps == []
     assert run.result.error is not None
     assert run.result.error.reason == DEADLINE_REASON
+
+
+def stubborn(then: str) -> Step:
+    """A step that catches the timeout's cancellation, then returns or raises."""
+
+    async def step(ctx: ToolContext) -> object:
+        with contextlib.suppress(asyncio.CancelledError):
+            await asyncio.sleep(30)
+        # Some cleanup after the catch. Without an await here, CPython 3.11's
+        # trace hook is dropped for the rest of the run and coverage under-reports.
+        await asyncio.sleep(0)
+        if then == "failure":
+            raise ToolFailure(
+                ToolError(error_class=ErrorClass.TRANSIENT, reason="reset", message="x")
+            )
+        if then == "crash":
+            raise RuntimeError("cleanup failed")
+        return Out(value=1)
+
+    return step
+
+
+@pytest.mark.parametrize("then", ["return", "failure", "crash"])
+async def test_outcome_after_the_timeout_fired_is_still_a_timeout(then: str) -> None:
+    # Chad's M2 re-check N-1: a fired timeout is final, whatever the tool does next.
+    tool = ScriptTool([stubborn(then)], timeout_s=0.02, retry=RetryPolicy.no_retry())
+    executor, _ = make(tool)
+    run = await executor.execute("script", {}, CTX)
+    assert run.result.output is None
+    assert run.result.error is not None
+    assert (run.result.error.error_class, run.result.error.reason) == (
+        ErrorClass.TIMEOUT,
+        "tool_timeout",
+    )
+    assert "0.02s" in run.result.error.message
+
+
+@pytest.mark.parametrize("then", ["return", "crash"])
+async def test_outcome_after_the_deadline_cut_is_a_deadline_error(then: str) -> None:
+    tool = ScriptTool([stubborn(then)], timeout_s=60, retry=NO_JITTER)
+    executor, time_ = make(tool)
+    run = await executor.execute("script", {}, CTX, deadline=time_.now + 0.02)
+    assert tool.calls == 1
+    assert run.result.error is not None and run.result.error.reason == DEADLINE_REASON
+
+
+async def test_late_output_is_retried_like_any_timeout() -> None:
+    tool = ScriptTool([stubborn("return"), ok(9)], timeout_s=0.02, retry=NO_JITTER)
+    executor, time_ = make(tool)
+    run = await executor.execute("script", {}, CTX)
+    assert run.result.output == {"value": 9}
+    assert time_.sleeps == [0.5]
+    first = run.attempts[0].error
+    assert first is not None and first.reason == "tool_timeout"
 
 
 async def test_real_builtin_tool_through_the_executor() -> None:

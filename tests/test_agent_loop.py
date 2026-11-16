@@ -18,6 +18,7 @@ Three kinds of time are used:
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import time
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -45,6 +46,7 @@ from agentic_research.agent import (
     Verdict,
     Verifier,
 )
+from agentic_research.agent.policy import ProviderCallInfo
 from agentic_research.tools import (
     ErrorClass,
     RetryPolicy,
@@ -56,7 +58,13 @@ from agentic_research.tools import (
     ToolOutput,
     ToolRegistry,
 )
-from agentic_research.trace import StepSpan, ToolCallSpan, dumps_trace, loads_trace
+from agentic_research.trace import (
+    ProviderCallSpan,
+    StepSpan,
+    ToolCallSpan,
+    dumps_trace,
+    loads_trace,
+)
 from virtual_time import loop_clock, run_virtual
 
 TASK = Task(question="What is 6*7?")
@@ -774,6 +782,164 @@ async def test_outer_cancellation_propagates() -> None:
     task.cancel()
     with pytest.raises(asyncio.CancelledError):
         await task
+
+
+# ---- Chad's M2 re-check N-1: a fired time limit is final ----------------------------
+#
+# A policy or verifier that catches the cancellation from ``asyncio.timeout``
+# and then returns (or raises something else) must not have that outcome
+# counted. Chad's probe: such a policy ended ``succeeded`` at ~0.7 s with a
+# 0.2 s step timeout, and a catch-then-raise verifier was ``verifier_error``.
+
+LATE_CALL = ProviderCallInfo(
+    provider="p", model="m", tool_format="native", input_tokens=30, output_tokens=7
+)
+
+
+class Stubborn:
+    """Sleeps ``cost``; if cancelled, keeps going ``extra`` more, then does ``then``.
+
+    ``then`` is ``"return"`` (the action), ``"raise"`` (RuntimeError) or
+    ``"fail"`` (PolicyFailure with tokens and a provider call).
+    """
+
+    def __init__(self, then: str, action: Scripted = ANSWER, *, cost: float = 0.7) -> None:
+        self._then = then
+        self._action = action
+        self._cost = cost
+        self.cancelled = False
+
+    async def _sleep(self) -> None:
+        loop = asyncio.get_running_loop()
+        end = loop.time() + self._cost
+        try:
+            await asyncio.sleep(self._cost)
+        except asyncio.CancelledError:
+            self.cancelled = True
+            await asyncio.sleep(end - loop.time())  # finish the work anyway
+
+    async def next_action(self, state: RunState) -> Scripted:
+        await self._sleep()
+        if self._then == "raise":
+            raise RuntimeError("cleanup failed")
+        if self._then == "fail":
+            raise PolicyFailure("unparseable", calls=[LATE_CALL], tokens=37)
+        return self._action
+
+    async def verify(self, answer: FinalAnswer, state: RunState) -> Verdict:
+        await self._sleep()
+        if self._then == "raise":
+            raise RuntimeError("cleanup failed")
+        return Verdict.accept()
+
+
+def late_events(trace: Any) -> list[dict[str, Any]]:
+    step = [s for s in trace.spans if isinstance(s, StepSpan)][-1]
+    return [dict(e.attributes) for e in step.events if e.name == "late_result_ignored"]
+
+
+@pytest.mark.parametrize(
+    ("then", "outcome"), [("return", "returned"), ("raise", "raised RuntimeError")]
+)
+def test_policy_outcome_after_its_step_timeout_is_a_timeout(then: str, outcome: str) -> None:
+    policy = Stubborn(then, Decision(action=ANSWER, tokens=11, calls=(LATE_CALL,)))
+    loop = v_loop(policy, Budgets(max_steps=3, deadline_s=5.0), step_timeout_s=0.2)
+    traced = run_virtual(loop.run_traced(TASK))
+    state = traced.state
+    assert policy.cancelled
+    assert state.terminal_label == "failed:policy_timeout"
+    assert state.answer is None and state.steps == []
+    assert state.counters.elapsed_s == pytest.approx(0.7)  # its overrun is still charged
+    error = traced.trace.run.error
+    assert error is not None and error.error_class is ErrorClass.TIMEOUT
+    assert error.message == "policy did not decide within 0.2s"
+    assert late_events(traced.trace) == [{"outcome": outcome}]
+    # A late Decision's usage and provider call still count; a crash reports none.
+    calls = [s for s in traced.trace.spans if isinstance(s, ProviderCallSpan)]
+    assert (state.counters.tokens, len(calls)) == ((11, 1) if then == "return" else (0, 0))
+
+
+def test_late_bare_action_from_a_policy_is_a_timeout_and_costs_nothing() -> None:
+    loop = v_loop(Stubborn("return", ANSWER), Budgets(max_steps=3), step_timeout_s=0.2)
+    state = run_virtual(loop.run(TASK))
+    assert state.terminal_label == "failed:policy_timeout"
+    assert state.counters.tokens == 0
+
+
+def test_policy_failure_after_the_step_timeout_is_a_timeout_with_its_usage() -> None:
+    loop = v_loop(Stubborn("fail"), Budgets(max_steps=3), step_timeout_s=0.2)
+    traced = run_virtual(loop.run_traced(TASK))
+    assert traced.state.terminal_label == "failed:policy_timeout"
+    assert traced.state.counters.tokens == 37
+    (call,) = [s for s in traced.trace.spans if isinstance(s, ProviderCallSpan)]
+    assert call.input_tokens == 30
+    assert late_events(traced.trace) == [{"outcome": "raised unparseable"}]
+
+
+@pytest.mark.parametrize("then", ["return", "raise", "fail"])
+def test_policy_outcome_after_the_deadline_exhausts_it(then: str) -> None:
+    loop = v_loop(Stubborn(then), Budgets(max_steps=3, deadline_s=0.2), step_timeout_s=60.0)
+    traced = run_virtual(loop.run_traced(TASK))
+    assert traced.state.terminal_label == "budget_exhausted:deadline"
+    assert traced.trace.run.error is None
+    assert len(late_events(traced.trace)) == 1
+
+
+@pytest.mark.parametrize(
+    ("then", "outcome"), [("return", "returned"), ("raise", "raised RuntimeError")]
+)
+def test_verifier_outcome_after_its_step_timeout_is_a_timeout(then: str, outcome: str) -> None:
+    verifier = Stubborn(then)
+    loop = v_loop(
+        ScriptedPolicy([ANSWER]),
+        Budgets(max_steps=3, deadline_s=5.0),
+        verifier=verifier,
+        step_timeout_s=0.2,
+    )
+    traced = run_virtual(loop.run_traced(TASK))
+    state = traced.state
+    assert verifier.cancelled
+    assert state.terminal_label == "failed:verifier_timeout"  # not succeeded / verifier_error
+    assert state.answer is None
+    assert len(state.steps) == 1 and state.steps[0].verdict is None
+    assert state.counters.elapsed_s == pytest.approx(0.7)
+    error = traced.trace.run.error
+    assert error is not None and error.error_class is ErrorClass.TIMEOUT
+    assert error.message == "verifier did not finish within 0.2s"
+    assert late_events(traced.trace) == [{"outcome": outcome}]
+
+
+@pytest.mark.parametrize("then", ["return", "raise"])
+def test_verifier_outcome_after_the_deadline_exhausts_it(then: str) -> None:
+    loop = v_loop(
+        ScriptedPolicy([ANSWER]),
+        Budgets(max_steps=3, deadline_s=0.2),
+        verifier=Stubborn(then),
+        step_timeout_s=60.0,
+    )
+    traced = run_virtual(loop.run_traced(TASK))
+    assert traced.state.terminal_label == "budget_exhausted:deadline"
+    assert traced.state.answer is None
+    assert traced.trace.run.error is None
+    assert len(late_events(traced.trace)) == 1
+
+
+def test_late_tool_output_is_a_timeout_through_the_loop() -> None:
+    class StubbornTool(SleepTool):
+        async def run(self, args: NoArgs, ctx: ToolContext) -> Out:
+            self.contexts.append(ctx)
+            with contextlib.suppress(asyncio.CancelledError):  # swallow it, answer anyway
+                await asyncio.sleep(HANG_S)
+            await asyncio.sleep(0)  # some cleanup (see `stubborn` in test_tool_executor.py)
+            return Out(value=42)
+
+    tool = StubbornTool("a", cost=0.0, timeout_s=0.2)
+    tool.retry = RetryPolicy.no_retry()
+    loop = v_loop(ScriptedPolicy([CALL, GiveUp(reason="no_tool")]), Budgets(max_steps=3), [tool])
+    state = run_virtual(loop.run(TASK))
+    result = state.steps[0].result
+    assert result is not None and result.output is None
+    assert result.error is not None and result.error.reason == "tool_timeout"
 
 
 # ---- construction -----------------------------------------------------------------

@@ -26,8 +26,11 @@ Span layout:
   deadline) is a zero-length attempt 1 carrying that error.
 
 Guardrail refusals (``loop_detected``), verifier rejections
-(``answer_rejected``) and an accepted answer whose verification ended at or
-after the deadline (``answer_after_deadline``) are events on their step.
+(``answer_rejected``), an accepted answer whose verification ended at or
+after the deadline (``answer_after_deadline``) and a policy or verifier
+outcome that arrived after its time limit fired (``late_result_ignored``,
+attribute ``outcome``: ``returned`` or ``raised <name>``) are events on their
+step.
 """
 
 from __future__ import annotations

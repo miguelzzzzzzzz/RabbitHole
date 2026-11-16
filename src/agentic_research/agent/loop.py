@@ -33,6 +33,15 @@ Budget rules:
   and tool time, backoff sleeps included, is charged to ``elapsed_s`` (plus
   ``tool_attempts``/``backoff_s``). Overshoot past the deadline is limited
   to cancellation latency.
+- Once a time limit has fired, the call's outcome never counts: a policy or
+  verifier that catches the cancellation and then returns, or raises
+  something else, ends the run exactly as if it had let the cancellation
+  through (``budget_exhausted:deadline`` or ``failed:*_timeout``), with a
+  ``late_result_ignored`` step event saying what came back. Usage a late
+  `Decision` or `PolicyFailure` reports is still charged. A call that
+  swallows the cancellation and keeps running is not cancelled again, so
+  its overshoot is unbounded: policies and verifiers must let
+  ``CancelledError`` propagate.
 - A rejected answer costs one repair; the run ends as
   ``budget_exhausted:repairs`` once repairs exceed ``max_repairs``.
 
@@ -88,6 +97,7 @@ INVALID_ACTION = "invalid_action"
 VERIFIER_ERROR = "verifier_error"
 VERIFIER_TIMEOUT = "verifier_timeout"
 ANSWER_AFTER_DEADLINE = "answer_after_deadline"
+LATE_RESULT_IGNORED = "late_result_ignored"
 DEFAULT_LOOP_GUARD = LoopGuard()
 _RUN_ID_RE = re.compile(r"[A-Za-z0-9_.:-]{1,64}")
 
@@ -184,7 +194,7 @@ class AgentLoop:
                 break
             policy_start = clock()
             rec.begin_step(len(state.steps), policy_start)
-            decision, calls = await self._decide(state, deadline)
+            decision, calls = await self._decide(state, deadline, rec)
             rec.provider_calls(calls, policy_start, clock())
             tick()
             state.counters.tokens += decision.tokens
@@ -216,9 +226,15 @@ class AgentLoop:
         return TracedRun(state=state, trace=trace)
 
     async def _decide(
-        self, state: RunState, deadline: float | None
+        self, state: RunState, deadline: float | None, rec: TraceRecorder
     ) -> tuple[Decision | _Stop, tuple[ProviderCallInfo, ...]]:
-        """The policy's decision (or why the run stops) and the provider calls it reported."""
+        """The policy's decision (or why the run stops) and the provider calls it reported.
+
+        Once the time limit has fired, whatever the policy does next (return a
+        decision after swallowing the cancellation, or raise something other
+        than ``CancelledError``) is a timeout: the result is not used, and a
+        ``late_result_ignored`` step event records what came back.
+        """
         bound = self._time_limit(deadline)
         if bound is None:
             return _Stop(RunStatus.BUDGET_EXHAUSTED, BudgetKind.DEADLINE), ()
@@ -227,15 +243,14 @@ class AgentLoop:
             async with asyncio.timeout(limit) as scope:
                 raw = await self._policy.next_action(state.model_copy(deep=True))
         except TimeoutError:
-            if not scope.expired():  # the policy raised its own TimeoutError
-                return _Stop(
-                    RunStatus.FAILED, POLICY_ERROR, message="policy raised TimeoutError"
-                ), ()
-            if deadline_binds:
-                return _Stop(RunStatus.BUDGET_EXHAUSTED, BudgetKind.DEADLINE), ()
-            message = f"policy did not decide within {limit:g}s"
-            return _Stop(RunStatus.FAILED, POLICY_TIMEOUT, ErrorClass.TIMEOUT, message), ()
+            if scope.expired():
+                return _policy_timed_out(limit, deadline_binds), ()
+            # the policy raised its own TimeoutError
+            return _Stop(RunStatus.FAILED, POLICY_ERROR, message="policy raised TimeoutError"), ()
         except PolicyFailure as exc:  # the policy's own classified failure
+            if scope.expired():  # raised after its call was cancelled
+                rec.step_event(LATE_RESULT_IGNORED, at=None, outcome=f"raised {exc.reason}")
+                return _policy_timed_out(limit, deadline_binds, tokens=exc.tokens), exc.calls
             stop = _Stop(
                 RunStatus.FAILED,
                 exc.reason,
@@ -245,8 +260,16 @@ class AgentLoop:
             )
             return stop, exc.calls
         except Exception as exc:  # a broken policy must not crash the loop
+            if scope.expired():  # e.g. caught the cancellation, then raised something else
+                rec.step_event(LATE_RESULT_IGNORED, at=None, outcome=f"raised {type(exc).__name__}")
+                return _policy_timed_out(limit, deadline_binds), ()
             message = f"policy raised {type(exc).__name__}"
             return _Stop(RunStatus.FAILED, POLICY_ERROR, message=message), ()
+        if scope.expired():  # the policy swallowed the cancellation and returned anyway
+            rec.step_event(LATE_RESULT_IGNORED, at=None, outcome="returned")
+            if isinstance(raw, Decision):  # its usage was still spent
+                return _policy_timed_out(limit, deadline_binds, tokens=raw.tokens), raw.calls
+            return _policy_timed_out(limit, deadline_binds), ()
         if isinstance(raw, Decision):
             return raw, raw.calls
         if isinstance(raw, ToolCall | FinalAnswer | GiveUp):
@@ -285,19 +308,25 @@ class AgentLoop:
                 verdict = await self._verifier.verify(action, state.model_copy(deep=True))
         except TimeoutError:
             self._record(state, action)
-            if not scope.expired():  # the verifier raised its own TimeoutError
+            if scope.expired():
+                _verifier_timed_out(state, rec, limit, deadline_binds)
+            else:  # the verifier raised its own TimeoutError
                 rec.fail(ErrorClass.PERMANENT, "verifier raised TimeoutError")
                 state.finish(RunStatus.FAILED, detail=VERIFIER_ERROR)
-            elif deadline_binds:
-                state.finish(RunStatus.BUDGET_EXHAUSTED, detail=BudgetKind.DEADLINE)
-            else:
-                rec.fail(ErrorClass.TIMEOUT, f"verifier did not finish within {limit:g}s")
-                state.finish(RunStatus.FAILED, detail=VERIFIER_TIMEOUT)
             return
         except Exception as exc:
             self._record(state, action)
-            rec.fail(ErrorClass.PERMANENT, f"verifier raised {type(exc).__name__}")
-            state.finish(RunStatus.FAILED, detail=VERIFIER_ERROR)
+            if scope.expired():  # e.g. caught the cancellation, then raised something else
+                rec.step_event(LATE_RESULT_IGNORED, at=None, outcome=f"raised {type(exc).__name__}")
+                _verifier_timed_out(state, rec, limit, deadline_binds)
+            else:
+                rec.fail(ErrorClass.PERMANENT, f"verifier raised {type(exc).__name__}")
+                state.finish(RunStatus.FAILED, detail=VERIFIER_ERROR)
+            return
+        if scope.expired():  # the verifier swallowed the cancellation and returned anyway
+            self._record(state, action)
+            rec.step_event(LATE_RESULT_IGNORED, at=None, outcome="returned")
+            _verifier_timed_out(state, rec, limit, deadline_binds)
             return
         if not isinstance(verdict, Verdict):
             self._record(state, action)
@@ -358,6 +387,25 @@ class AgentLoop:
         observation = self._shaper.observe(record)
         if observation is not None:
             self._shaper.add(state.observations, observation)
+
+
+def _policy_timed_out(limit: float | None, deadline_binds: bool, *, tokens: int = 0) -> _Stop:
+    """Why the run stops when the policy call's time limit fired (``tokens`` spent anyway)."""
+    if deadline_binds:
+        return _Stop(RunStatus.BUDGET_EXHAUSTED, BudgetKind.DEADLINE, tokens=tokens)
+    message = f"policy did not decide within {limit:g}s"
+    return _Stop(RunStatus.FAILED, POLICY_TIMEOUT, ErrorClass.TIMEOUT, message, tokens=tokens)
+
+
+def _verifier_timed_out(
+    state: RunState, rec: TraceRecorder, limit: float | None, deadline_binds: bool
+) -> None:
+    """End the run when the verifier's time limit fired."""
+    if deadline_binds:
+        state.finish(RunStatus.BUDGET_EXHAUSTED, detail=BudgetKind.DEADLINE)
+        return
+    rec.fail(ErrorClass.TIMEOUT, f"verifier did not finish within {limit:g}s")
+    state.finish(RunStatus.FAILED, detail=VERIFIER_TIMEOUT)
 
 
 def _failure_class(exc: PolicyFailure) -> ErrorClass:

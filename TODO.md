@@ -53,7 +53,7 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] R-9 (owner: Kim; done 2026-11-09): one sentence in `docs/providers.md`: JSON moved 10 to 6 between runs with different `--reasoning-format` settings; no causal claim from two runs
 - [ ] OPT-1 (optional; owner: Kim): replace the always-skipping `test_live_probe_marker_exists_for_manual_runs`
 
-## M2 - Agent loop, run state, budgets, timeouts/retries, scripted provider (in progress)
+## M2 - Agent loop, run state, budgets, timeouts/retries, scripted provider (done 2026-11-16)
 - [x] R-3 first (see above; 2026-11-08)
 - [x] `RunState` + `Action` union (`ToolCall | FinalAnswer | GiveUp`) + `Policy` protocol + `Budgets` (`agentic_research.agent`; terminal statuses, JSON round-trip; 2026-11-09)
 - [x] `ToolExecutor`: per-call timeout, seeded backoff retries for `transient`/`timeout` only, injectable clock/sleeper, optional deadline (`agentic_research.tools.executor`; 2026-11-10)
@@ -68,13 +68,14 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [x] M2 review MAJOR-1: verifier bounded by step timeout and run deadline; `failed:verifier_timeout`; late acceptance not honoured (2026-11-15)
 - [x] M2 review MAJOR-2: virtual-time budget property test asserts deadline (`DEADLINE_TOLERANCE_S`), tokens and repairs bounds; ADR-0006/SPEC/PLAN budget rules (Bogart's patch, reconciled) (2026-11-15)
 - [x] M2 review MINOR-4: tokens of unparseable replies charged (`PolicyFailure.tokens`) (2026-11-15)
-- [ ] Ask Chad to re-check MAJOR-1/-2 (+ MINOR-4); M2 closes after his re-check
-- [ ] M2 review MINOR-1 (before M4): `arp run` publishes the trace without clobbering (`os.link` or `open(..., "x")`), exit 2 on a lost race, mid-run test; fix README/CHANGELOG "never overwritten" wording
-- [ ] M2 review MINOR-2 (before M5/M6): provider-call span (and tokens, if known) for a policy call cancelled by timeout
-- [ ] M2 review MINOR-3 (before M4/M5 latency): `started_at`/`ended_at` on `ProviderCallInfo`
-- [ ] M2 review MINOR-5: `run_config` (seed, all limits, step timeout) and `budget_counters` events in the trace; `backoff_s` on failed attempt spans
-- [ ] M2 review MINOR-6: schedule R-2 (and R-1) as M5 prerequisites in PLAN.md
-- [ ] M2 review MINOR-7: `.env.example` budget sentence vs CLI flags
+- [x] Chad's M2 re-check at `1200762`: PASS (0 CRITICAL, 0 MAJOR); M2 closes once new MINOR N-1 has an owner (2026-11-15)
+- [x] Re-check N-1 (owner: Kim; done 2026-11-16, before M3's real verifier): `scope.expired()` checked after every timed policy, verifier and tool call, so an outcome after a fired limit (returned after swallowing the cancellation, or raised something else) is a timeout, not `succeeded`/`*_error`; `late_result_ignored` step event; README/CHANGELOG trace-overwrite wording made accurate
+- [ ] M2 review MINOR-1 (before M4; owner: Kim): `arp run` publishes the trace without clobbering (`os.link` or `open(..., "x")`), exit 2 on a lost race, mid-run test (README/CHANGELOG wording already made accurate 2026-11-16; update it again when fixed)
+- [ ] M2 review MINOR-2 (before M5/M6; owner: Kim): provider-call span (and tokens, if known) for a policy call cancelled by timeout
+- [ ] M2 review MINOR-3 (before M4/M5 latency; owner: Kim): `started_at`/`ended_at` on `ProviderCallInfo`
+- [ ] M2 review MINOR-5 (owner: Kim): `run_config` (seed, all limits, step timeout) and `budget_counters` events in the trace; `backoff_s` on failed attempt spans
+- [ ] M2 review MINOR-6 (owner: Kim): schedule R-2 (and R-1) as M5 prerequisites in PLAN.md
+- [ ] M2 review MINOR-7 (owner: Kim): `.env.example` budget sentence vs CLI flags
 - [ ] M2 review OPT-1..OPT-7 (optional; see Chad's review)
 - [x] Known limits raised with Chad (he classified them as MINOR-3, MINOR-2, MINOR-1): provider-call spans share the policy call's interval (one call per step in M2); a policy that times out reports no provider-call span; `arp run` checks for an existing trace file before the run, then replaces atomically (not an exclusive create)
 
