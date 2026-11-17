@@ -11,7 +11,7 @@ unless they come from a committed report under `evals/results/`.
 | --- | --- | --- |
 | M1 | Scaffold, tool contracts, registry, calculator, trace schema, local runtime and tool-calling probe | done (2026-11-08; Chad re-check passed at `60e7ad9`) |
 | M2 | Agent loop, run state, budgets, timeouts/retries, scripted provider | done (2026-11-16; Chad re-check passed at `1200762`, N-1 fixed) |
-| M3 | Research tools on the project-01 retriever, citations, guardrails | planned |
+| M3 | Research tools on the project-01 retriever, citations, guardrails | in progress |
 | M4 | Task suites, graders, eval runner, oracle and heuristic baselines | planned |
 | M5 | Local LLM policy (Qwen3-1.7B, default), call parsing/repair, optional hosted backend, record/replay, baseline run | planned |
 | M6 | Fault injection, failure taxonomy, baselines and ablations | planned |

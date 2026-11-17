@@ -170,12 +170,16 @@ def test_verify_rejects_a_file_with_the_wrong_digest(tmp_path: Path, pins: dict[
 @pytest.mark.slow
 @pytest.mark.allow_network
 def test_live_server_serves_the_pinned_model(env: dict[str, str]) -> None:
-    """Needs `scripts/local_runtime.sh serve` running; never runs in CI."""
+    """Needs `scripts/local_runtime.sh serve` running; never runs in CI.
+
+    Skips (not fails) when nothing answers, so a plain ``pytest`` with no ``-m``
+    filter passes on a machine without the server (Chad's M2 nit).
+    """
     base_url = os.environ.get("ARP_LLM_BASE_URL") or env["ARP_LLM_BASE_URL"]
     try:
         with urllib.request.urlopen(f"{base_url}/models", timeout=10) as resp:
             payload = json.load(resp)
     except OSError as exc:
-        pytest.fail(f"no server at {base_url} ({exc}); run scripts/local_runtime.sh serve")
+        pytest.skip(f"no server at {base_url} ({exc}); run scripts/local_runtime.sh serve")
     ids = [model["id"] for model in payload["data"]]
     assert ids == [env["ARP_LOCAL_MODEL"]]

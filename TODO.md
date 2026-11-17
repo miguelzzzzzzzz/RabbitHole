@@ -11,9 +11,10 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
       ADR-0002 note added.
 - [x] `v1.0.0` tagged at `b8015f3` (not `977f091`); re-verified 2026-10-29:
       interface unchanged from `977f091` (version string only). Pin final.
-- [ ] When M3 starts: wire `RagEngineBackend` to index format 2
+- [x] When M3 starts: wire `RagEngineBackend` to index format 2
       (`documents.jsonl`, explicit `corpus_id`, `search --json` `hits` +
-      `schema_version`, citation check on normalized text + `content_hash`).
+      `schema_version`; 2026-11-17). The citation check on normalized text +
+      `content_hash` is the M3 `CitationVerifier` item below.
 
 ## Model policy (2026-10-25, ADR-0009: local-first while Cline is paused)
 - [ ] Do not call the Cline API until the owner re-enables it
@@ -52,6 +53,7 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [ ] R-7 (owner: Kim): document the capture configuration and scrubbing of `llama_server_chat_completion_tool_reasoning.json`, or label it synthetic
 - [x] R-9 (owner: Kim; done 2026-11-09): one sentence in `docs/providers.md`: JSON moved 10 to 6 between runs with different `--reasoning-format` settings; no causal claim from two runs
 - [ ] OPT-1 (optional; owner: Kim): replace the always-skipping `test_live_probe_marker_exists_for_manual_runs`
+- [x] Chad's M2 spot-check nit (done 2026-11-17): a plain `pytest` with no `-m` filter passes without a local server (`test_live_server_serves_the_pinned_model` skips when unreachable); the live Qwen test accepts the empty `<think></think>` Qwen3 emits under `--reasoning-format none` via the shared think check
 
 ## M2 - Agent loop, run state, budgets, timeouts/retries, scripted provider (done 2026-11-16)
 - [x] R-3 first (see above; 2026-11-08)
@@ -78,6 +80,15 @@ Short-horizon task list. Milestones and acceptance criteria live in `PLAN.md`.
 - [ ] M2 review MINOR-7 (owner: Kim): `.env.example` budget sentence vs CLI flags
 - [ ] M2 review OPT-1..OPT-7 (optional; see Chad's review)
 - [x] Known limits raised with Chad (he classified them as MINOR-3, MINOR-2, MINOR-1): provider-call spans share the policy call's interval (one call per step in M2); a policy that times out reports no provider-call span; `arp run` checks for an existing trace file before the run, then replaces atomically (not an exclusive create)
+
+## M3 - Research tools on the project-01 retriever, citations, guardrails (in progress)
+- [x] Search backends (2026-11-17): `Passage`/`StoredDocument`/`SearchBackend` contract, `parse_search_payload` (`schema_version` gate, `hits`), `RagEngineBackend` (format 2 only, explicit `corpus_id`, tamper refusal via `load_index`, lexical default + hybrid), `FixtureSearchBackend`; CitationNeeded `v1.0.0` git dependency (locked `b8015f3`); fictional fixture corpus `rabbithole-tasks-v1`; shared contract suite on both backends, pinned doc id, `search --json` CLI equivalence
+- [ ] Tools: `search_corpus` (replaces the probe stub schema), `read_document(doc_id, start, end)` (bounded slice of the stored text), both over `SearchBackend`, run off the event loop; evidence store of observed spans per run
+- [ ] `final_answer(answer, claims[{text, citations[...]}])` and `CitationVerifier` (validity, freshness/`stale_source`, groundedness, repair feedback) plugged into the loop's verifier hook; table-driven rejections
+- [ ] `fetch_url` (fixture map by default; live only with `ARP_ALLOW_LIVE_FETCH=true` + host allowlist; socket-blocked test), HTML-to-text with offsets
+- [ ] Guardrails: untrusted-data envelope, pattern-based injection detector (flags in trace + evidence store), per-task tool and URL allowlists; injection fixture pages
+- [ ] Integration test: oracle trajectory (search, read, final_answer) over `RagEngineBackend` on the fixture index, accepted by the verifier
+- [ ] Request Chad's M3 review
 
 ## Later (from M1)
 - [ ] M5: wire `ARP_TOOL_FORMAT` from env into the agent loop (OPT-3; currently only in `.env.example`)

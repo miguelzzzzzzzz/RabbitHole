@@ -33,6 +33,7 @@ from agentic_research.providers import (
     parse_usage,
 )
 from agentic_research.providers.openai_compat import parse_chat_completion
+from agentic_research.providers.toolcall_json import leaked_think_reason, strip_empty_think
 
 ROOT = Path(__file__).resolve().parents[1]
 SCRIPT = ROOT / "scripts" / "local_runtime.sh"
@@ -802,8 +803,10 @@ async def test_live_qwen_non_thinking_content_reply(live_server: str) -> None:
             )
         )
     assert response.message.content is not None
-    assert response.message.content.strip()
-    assert "<think>" not in response.message.content
+    # Non-thinking Qwen3 with --reasoning-format none leads with an empty
+    # <think></think> block; that is allowed, reasoning text is not (R-3).
+    assert leaked_think_reason(response.message) is None
+    assert strip_empty_think(response.message.content).strip()
     assert response.model
     assert response.latency_ms > 0.0
 

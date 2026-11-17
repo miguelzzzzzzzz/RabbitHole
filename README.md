@@ -8,7 +8,7 @@ versioned JSONL traces, and programmatic trajectory evals. The default policy
 model is a small local model (Qwen3-1.7B, quantized, on CPU); CI never calls a
 model.
 
-**Status:** M1 done (2026-11-08); M2 (agent loop) in progress. Built so far: package scaffold and CI, typed
+**Status:** M1 done (2026-11-08), M2 done (2026-11-16); M3 (research tools) in progress. Built so far: package scaffold and CI, typed
 tool contracts and a validating tool registry, the `calculator` tool, trace
 schema v1 (JSONL), `arp tools schema`, a pinned local model runtime
 (llama.cpp `llama-server` + Qwen3-1.7B Q4_K_M), `arp doctor` (memory
@@ -22,8 +22,11 @@ deterministic observation shaping, a `ScriptedProvider` (canned replies,
 malformed ones included), an `OraclePolicy` and an `LLMPolicy` skeleton
 (exercised only against the scripted provider so far), a JSONL trace of every
 run (run, step, provider-call and per-attempt tool spans), and `arp run
---provider scripted` / `arp trace show`.
-Not built yet: model-backed `arp run` providers, research tools, citations, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
+--provider scripted` / `arp trace show`, and the first M3 piece: the search
+backend contract (`Passage`, `SearchBackend`) with a `RagEngineBackend`
+adapter over a CitationNeeded `v1.0.0` format-2 index and a
+`FixtureSearchBackend` for unit tests.
+Not built yet: model-backed `arp run` providers, the research tools themselves (`search_corpus`, `read_document`, `fetch_url`, `final_answer`), the citation verifier, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
 
 ## Architecture
 
@@ -40,9 +43,10 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | `OpenAICompatibleProvider` | async httpx chat completions with optional `tools`, usage, native `tool_calls` parsing (local server) | built (M1) |
 | JSON-in-text tool protocol | strict parser, `<think>` strip, reason codes, `parse_failures` counter | built (M1) |
 | Tool-calling probe | frozen 20-prompt probe picks native vs json default | built (M1); default `native` |
-| Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | built (M2; review fixes in, awaiting re-check) |
-| Run tracing, `arp run`, `arp trace show` | every run writes a trace v1 file; scripted provider only (no model) | built (M2; review fixes in, awaiting re-check) |
-| Research tools, citations, guardrails | `search_corpus`/`read_document` over [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0`; citations checked against exact spans; allowlists and loop detection | M3 |
+| Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | built (M2) |
+| Run tracing, `arp run`, `arp trace show` | every run writes a trace v1 file; scripted provider only (no model) | built (M2) |
+| Search backends | `SearchBackend` contract; `RagEngineBackend` over a [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0` index (format 2, explicit `corpus_id`, BM25 default, hybrid option, `search --json` `schema_version` gate); `FixtureSearchBackend` for tests | built (M3, in progress) |
+| Research tools, citations, guardrails | `search_corpus`/`read_document` over the search backend; citations checked against exact spans; allowlists and loop detection | M3 |
 | Task suites, graders, eval runner | programmatic trajectory graders; oracle and heuristic baselines | M4 |
 | Local LLM policy, record/replay | live runs on the local model; cassettes replay in CI | M5 |
 | Fault injection, ablations | tool errors, timeouts, malformed output, prompt injection | M6 |
@@ -106,7 +110,7 @@ parse-failure counts over M2+ runs).
 
 ```bash
 python -m venv .venv && . .venv/bin/activate
-pip install -e ".[dev]"
+pip install -e ".[dev]"   # also installs CitationNeeded v1.0.0 from GitHub (needs git)
 ruff check . && ruff format --check . && mypy
 pytest -m "not slow" --cov
 ```
