@@ -86,7 +86,10 @@ class ChatCompleter(Protocol):
     async def complete(self, request: ChatRequest) -> ChatResponse: ...
 
 
-# --- Stub search_corpus (schema only; M3 wires the real tool) -----------------
+# --- Stub search_corpus (schema only) ------------------------------------------
+# Frozen with probes/tool_calls.v1 so the probe stays reproducible. The real tool
+# (agentic_research.tools.search.SearchCorpusTool) accepts the same arguments;
+# tests/test_research_tools.py pins this schema and checks the parity.
 
 
 class SearchCorpusArgs(ToolArgs):

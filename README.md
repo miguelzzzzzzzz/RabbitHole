@@ -22,11 +22,12 @@ deterministic observation shaping, a `ScriptedProvider` (canned replies,
 malformed ones included), an `OraclePolicy` and an `LLMPolicy` skeleton
 (exercised only against the scripted provider so far), a JSONL trace of every
 run (run, step, provider-call and per-attempt tool spans), and `arp run
---provider scripted` / `arp trace show`, and the first M3 piece: the search
+--provider scripted` / `arp trace show`, and the first M3 pieces: the search
 backend contract (`Passage`, `SearchBackend`) with a `RagEngineBackend`
 adapter over a CitationNeeded `v1.0.0` format-2 index and a
-`FixtureSearchBackend` for unit tests.
-Not built yet: model-backed `arp run` providers, the research tools themselves (`search_corpus`, `read_document`, `fetch_url`, `final_answer`), the citation verifier, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
+`FixtureSearchBackend` for unit tests, the `search_corpus` and
+`read_document` tools over it, and a per-run evidence store of observed spans.
+Not built yet: model-backed `arp run` providers, `fetch_url`, `final_answer`, the citation verifier, `arp run` over a corpus, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
 
 ## Architecture
 
@@ -46,7 +47,8 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | built (M2) |
 | Run tracing, `arp run`, `arp trace show` | every run writes a trace v1 file; scripted provider only (no model) | built (M2) |
 | Search backends | `SearchBackend` contract; `RagEngineBackend` over a [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0` index (format 2, explicit `corpus_id`, BM25 default, hybrid option, `search --json` `schema_version` gate); `FixtureSearchBackend` for tests | built (M3, in progress) |
-| Research tools, citations, guardrails | `search_corpus`/`read_document` over the search backend; citations checked against exact spans; allowlists and loop detection | M3 |
+| Research tools | `search_corpus` (top-k passages with citation fields) and `read_document` (bounded slice of the normalized stored text) over any `SearchBackend`, run in a worker thread; `EvidenceStore` of the spans a run observed, built from its recorded steps | built (M3, in progress) |
+| Citations, `fetch_url`, guardrails | `final_answer` with claims checked against exact observed spans; fixture-backed `fetch_url`; allowlists and injection flags | M3 |
 | Task suites, graders, eval runner | programmatic trajectory graders; oracle and heuristic baselines | M4 |
 | Local LLM policy, record/replay | live runs on the local model; cassettes replay in CI | M5 |
 | Fault injection, ablations | tool errors, timeouts, malformed output, prompt injection | M6 |
