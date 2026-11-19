@@ -297,7 +297,10 @@ Scope
   - Freshness: cited `content_hash` matches the stored document; mismatch =>
     `stale_source`.
   - Groundedness: the span lies inside text observed in this run's evidence
-    store.
+    store, which holds only spans shown to the policy in full (passage-boundary
+    cut of `search_corpus` observations with `shown_passages`; a truncated
+    `read_document` slice adds nothing; elision keeps evidence; ADR-0004
+    amendment, 2026-11-19).
   - On an invalid or stale citation it returns feedback if the repair budget
     remains, otherwise the run fails.
 - Guardrails:
@@ -330,6 +333,19 @@ Acceptance criteria
   socket-blocking fixture). A non-allowlisted host is refused even when live
   fetch is enabled.
 - Injection fixture pages are flagged in the trace.
+- Abstention and grounding (ADR-0004 amendment, 2026-11-19):
+  - Hybrid-mode nonsense query: search returns `k` passages, the scripted
+    policy gives up, and the run ends `abstained`. A scripted policy that
+    answers instead is rejected by the verifier for ungrounded citations.
+  - Repairs exhausted on an unanswerable task are graded as not abstained.
+  - A search result cut mid-list: citations of shown passages are grounded,
+    citations of omitted passages are rejected as `ungrounded_citation`
+    (k=10 search over the fixture corpus).
+  - An evidence span shown in full, then elided, still grounds a citation.
+  - `read_document` slice cap vs shaper limit test.
+  - If a score floor exists: `evals/thresholds.v1.json` holds per-mode
+    values with the dev report path and SHA, committed before the first
+    test-split report (checked by git history in the M5 review).
 - CI green. 01's dependency is installed from the pinned `v1.0.0` ref.
 
 Tests

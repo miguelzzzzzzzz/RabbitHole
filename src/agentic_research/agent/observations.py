@@ -9,6 +9,14 @@ and verifiers.
   call as its guardrail message and a rejected answer as the verifier's
   feedback. The text is cut to ``max_chars`` characters with an explicit
   ``...[truncated N chars]`` marker; ``truncated_chars`` records N.
+- A successful ``search_corpus`` result is cut at passage boundaries
+  instead: the longest prefix of its passages whose JSON fits in
+  ``max_chars`` is rendered, the rest are dropped whole and announced with
+  ``...[N passages omitted]``, and ``shown_passages`` records how many were
+  rendered. No passage is ever cut mid-text, so the evidence store can count
+  exactly the passages the policy saw (ADR-0004). If not even the result
+  with no passages fits (an absurdly long ``corpus_id``), the generic
+  character cut applies with ``shown_passages = 0``.
 - Only the ``keep_recent`` newest observations keep their text. Older ones
   are elided to a one-line summary (step, tool, outcome, size) that contains
   no tool output.
@@ -25,12 +33,14 @@ guardrail work.
 from __future__ import annotations
 
 import json
-from typing import Literal
+from typing import Any, Literal
 
 from agentic_research.agent.actions import ToolCall
 from agentic_research.agent.state import Observation, StepRecord
+from agentic_research.tools.search import SEARCH_CORPUS
 
 TRUNCATION_MARKER = "...[truncated {n} chars]"
+PASSAGES_MARKER = "...[{n} {noun} omitted]"
 _NAME_LIMIT = 64
 
 
@@ -46,6 +56,15 @@ def truncate(text: str, max_chars: int) -> tuple[str, int]:
         return text, 0
     dropped = len(text) - max_chars
     return text[:max_chars] + TRUNCATION_MARKER.format(n=dropped), dropped
+
+
+def passages_marker(omitted: int) -> str:
+    """The marker announcing ``omitted`` (>= 1) dropped passages."""
+    return PASSAGES_MARKER.format(n=omitted, noun="passage" if omitted == 1 else "passages")
+
+
+def _canonical(value: Any) -> str:
+    return json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
 
 
 class ObservationShaper:
@@ -75,9 +94,11 @@ class ObservationShaper:
             result = step.result
             tool = one_line(result.tool, _NAME_LIMIT)
             if result.error is None:
-                body = json.dumps(
-                    result.output, sort_keys=True, ensure_ascii=False, separators=(",", ":")
-                )
+                output = result.output or {}
+                passages = output.get("passages")
+                if result.tool == SEARCH_CORPUS and isinstance(passages, list):
+                    return self._search(step, output, passages)
+                body = _canonical(result.output)
                 return self._make(
                     step,
                     "tool",
@@ -105,6 +126,39 @@ class ObservationShaper:
         full = [i for i, o in enumerate(observations) if not o.elided]
         for i in full[: -self.keep_recent]:
             observations[i] = observations[i].elide()
+
+    def _search(self, step: StepRecord, output: dict[str, Any], passages: list[Any]) -> Observation:
+        """A ``search_corpus`` observation cut at passage boundaries."""
+        total = len(passages)
+        full_body = _canonical(output)
+        full_text = f"{SEARCH_CORPUS} ok: {full_body}"
+        for shown in range(total, -1, -1):
+            body = (
+                full_body
+                if shown == total
+                else _canonical({**output, "passages": passages[:shown]})
+            )
+            text = f"{SEARCH_CORPUS} ok: {body}"
+            if len(text) > self.max_chars:
+                continue
+            dropped = len(full_text) - len(text)
+            summary = f"{SEARCH_CORPUS} ok, {len(body)} chars elided"
+            if shown < total:
+                summary += f", {shown} of {total} passages shown"
+                text += passages_marker(total - shown)
+            return Observation(
+                step=step.index,
+                source="tool",
+                text=text,
+                summary=f"step {step.index}: {summary}",
+                truncated_chars=dropped,
+                shown_passages=shown,
+            )
+        # Not even the passage-free result fits: character cut, no passage shown.
+        cut = self._make(
+            step, "tool", full_text, f"{SEARCH_CORPUS} ok, {len(full_body)} chars elided"
+        )
+        return cut.model_copy(update={"shown_passages": 0})
 
     def _make(
         self,

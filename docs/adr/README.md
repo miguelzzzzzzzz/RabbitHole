@@ -25,7 +25,7 @@ records it in a 2026-10-30 note without changing ADR-016's decision.
 | [0001](0001-hand-rolled-agent-loop.md) | Hand-rolled agent loop instead of an agent framework | Accepted |
 | [0002](0002-reuse-rag-engine-retriever.md) | Reuse CitationNeeded's retriever as the `search_corpus` backend | Accepted |
 | [0003](0003-openai-compatible-provider.md) | Local Qwen3-1.7B as the default provider, an optional hosted OpenAI-compatible backend, scripted and replay providers for tests and CI | Accepted (amended 2026-10-25) |
-| [0004](0004-evaluation-data-and-graders.md) | HotpotQA subset plus hand-authored tool suite, graded programmatically | Accepted |
+| [0004](0004-evaluation-data-and-graders.md) | HotpotQA subset plus hand-authored tool suite, graded programmatically | Accepted (amended 2026-11-19: abstention, truncated evidence) |
 | [0005](0005-record-replay-cassettes.md) | Record/replay cassettes for deterministic, zero-cost CI evaluation | Accepted |
 | [0006](0006-budgets-timeouts-retries.md) | Budgets, timeouts, and retries enforced by the loop with classified errors | Accepted |
 | [0007](0007-offline-tools-and-guardrails.md) | Offline-first tools; tool output is untrusted data; citations must be observed | Accepted |

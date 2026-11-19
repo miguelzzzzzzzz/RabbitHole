@@ -401,6 +401,16 @@ Eval hygiene (like-for-like comparisons):
   counted separately (`n_no_relevant`), never silently scored 0. Intentional
   `unanswerable` tasks (gold = abstain) stay in the suite and are graded
   for abstention.
+- **Abstention.** The agent abstains only by giving up (`GiveUp`, status
+  `abstained`); empty search results are not the signal (hybrid search
+  always returns `k` neighbours). A run that ends `budget_exhausted:repairs`
+  is graded as not abstaining. `answered_when_unanswerable` and
+  `abstained_when_answerable` are always reported side by side (rate, count,
+  Wilson interval) with the unanswerable-task count and an
+  abstain-everything baseline row. Any retrieval score floor is per search
+  mode, tuned on `dev` only and frozen in `evals/thresholds.v1.json` before
+  any `test` run, and is advice to the policy, never an automatic abstain
+  (ADR-0004 amendment, 2026-11-19).
 - **Tiny sets.** Any suite or subset too small to support claims (for
   example a 3-task provider smoke) is labelled `smoke-only` in the report
   and must not appear in README claim tables.
@@ -429,7 +439,10 @@ size and bootstrap 95% CIs):
     `content_hash`; a mismatch is flagged `stale_source` (source changed or
     wrong document).
   - Groundedness: the span lies inside text the agent actually observed in
-    this run.
+    this run, and was shown in full: a passage dropped from a long search
+    observation, or a slice whose observation was truncated, grounds nothing.
+    Text shown in full stays observed after its observation is elided
+    (ADR-0004 amendment, 2026-11-19).
   - Support precision/recall: character-overlap of cited spans with gold
     evidence spans, with the threshold stated in the report. For HotpotQA
     this is computed at sentence level, comparable to the official

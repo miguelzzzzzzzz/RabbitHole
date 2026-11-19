@@ -41,3 +41,46 @@ must score 100%). Free-form answer quality is not measured and is stated as
 such. A hand-authored suite can reflect its author's biases. Mitigations are
 a fixed dev/test split before model runs, versioning, and reporting the suite
 hash.
+
+## Amendment (2026-11-19): abstention and truncated evidence
+Drafted by Bogart against `b852949` for the M3 citation-verifier slice.
+
+**Abstention.**
+- The agent abstains only through the policy's `GiveUp`, which ends the run
+  `abstained`. "No hits" is never the abstain signal: hybrid search always
+  returns `k` neighbours, even for a nonsense query.
+- The verifier backs it up: a `FinalAnswer` without a valid, fresh and
+  grounded citation is rejected (one repair, ADR-0006). A run that runs out
+  of repairs ends `budget_exhausted:repairs`, which is graded as *not*
+  abstaining; the agent never earns abstention credit by failing.
+- An optional retrieval score floor, if one is ever added (for example a
+  guardrail observation "no passage scored above the floor" that the policy
+  can act on), is set per search mode (`lexical`, `dense`, `hybrid`,
+  `rerank`, since RRF scores are not comparable with BM25 or cosine scores),
+  tuned on `dev` only and frozen in `evals/thresholds.v1.json` (value per
+  mode, dev report path, git SHA) before any `test` run. It is advice to the
+  policy, never an automatic abstain in the loop.
+- `answered_when_unanswerable` and `abstained_when_answerable` are always
+  reported side by side (rate, count, Wilson interval) with the unanswerable
+  task count, plus an abstain-everything baseline row, so a floor cannot win
+  one rate by quietly losing the other.
+
+**Truncated observations and groundedness.** A span grounds a citation only
+if the policy was shown that span's text in full, untruncated, in the
+observation of the step that returned it. A partial view counts as not seen
+(no partial-span credit: mapping a cut in canonical JSON back to character
+offsets is error-prone because of escaping).
+- `search_corpus` observations are cut at passage boundaries: trailing
+  passages that do not fit are dropped whole and announced
+  (`...[N passages omitted]`), and the observation records
+  `shown_passages`. No passage is cut mid-text.
+- `read_document` keeps its slice cap (1500) below the shaper's default
+  limit (2000) for plain prose; a slice that is truncated anyway (heavy JSON
+  escaping) adds no evidence.
+- The evidence store reads each step's observation and adds only fully
+  shown spans; steps without an observation add nothing. Dropped spans are
+  counted per step (the trace field `evidence_dropped_truncated` comes with
+  the verifier slice).
+- Later elision does not remove evidence: once shown in full, a span stays
+  observed after its observation is elided to a summary. Elision is context
+  management; the model did see the text.

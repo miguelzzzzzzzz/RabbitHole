@@ -7,20 +7,33 @@ results the loop accepted and handed to the policy. A search that timed out
 (its worker thread may still have finished), was refused by a guardrail or
 budget, or failed holds no evidence.
 
-* A successful ``search_corpus`` result contributes one span per passage; a
-  successful ``read_document`` result contributes its slice. Other tools
-  contribute nothing.
+* A successful ``search_corpus`` result contributes one span per passage
+  the policy was shown; a successful ``read_document`` result contributes
+  its slice if it was shown untruncated (below). Other tools contribute
+  nothing.
 * Spans are keyed by ``(doc_id, content_hash)``: text seen in one version of a
   document does not ground a citation of another version.
 * `EvidenceStore.covers` asks whether ``[start, end)`` lies inside the union of
   the observed spans of that document version (overlapping or touching spans
   merge, since together they show contiguous text).
 
-Known limit: a span counts as observed when its tool result was recorded,
-even if the observation shaper later truncated the text shown to the policy
-(``Observation.truncated_chars``). ``read_document`` caps slices below the
-shaper's default limit; the verifier slice decides how truncated observations
-count.
+Only text the policy was shown in full grounds anything (ADR-0004,
+"Truncated observations and groundedness"). The store therefore reads each
+step's `Observation` next to its result:
+
+* ``search_corpus``: the shaper cuts at passage boundaries and records
+  ``shown_passages``; only those leading passages become spans. The dropped
+  ones are counted in `EvidenceStore.dropped`.
+* ``read_document``: its slice counts only if the observation was not
+  truncated (``truncated_chars == 0``). The 1500-character cap keeps plain
+  prose with an ordinary ``source`` path below the shaper's default 2000
+  (tested), but JSON escaping (quotes,
+  newlines, control characters) can still push a slice over; such a slice
+  adds nothing. There is no partial-span credit.
+* A step with a result but no observation adds nothing.
+* Later elision does not remove evidence: an elided observation keeps
+  ``truncated_chars`` and ``shown_passages``, so text shown in full once
+  stays observed.
 
 This is separate from ``RunState.evidence`` (an M2 placeholder the loop does
 not fill), which the ``final_answer`` slice will replace or remove.
@@ -28,13 +41,13 @@ not fill), which the ``final_answer`` slice will replace or remove.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
+from types import MappingProxyType
 from typing import Final, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from agentic_research.agent.state import StepRecord
-from agentic_research.tools.base import ToolResult
+from agentic_research.agent.state import Observation, RunState, StepRecord
 from agentic_research.tools.read import READ_DOCUMENT, ReadDocumentOutput
 from agentic_research.tools.search import SEARCH_CORPUS, SearchCorpusOutput
 
@@ -68,42 +81,70 @@ class EvidenceStore:
 
     def __init__(self) -> None:
         self._spans: list[EvidenceSpan] = []
+        self._dropped: dict[int, int] = {}
         # (doc_id, content_hash) -> sorted, merged, disjoint [start, end) intervals.
         self._merged: dict[tuple[str, str], list[tuple[int, int]]] = {}
 
     @classmethod
-    def from_steps(cls, steps: Iterable[StepRecord]) -> EvidenceStore:
-        """The evidence in a run's recorded steps (``RunState.steps``)."""
+    def from_steps(
+        cls, steps: Iterable[StepRecord], observations: Iterable[Observation]
+    ) -> EvidenceStore:
+        """The evidence in a run's steps and observations (``RunState.steps`` and
+        ``RunState.observations``)."""
+        by_step = {o.step: o for o in observations}
         store = cls()
         for step in steps:
-            if step.result is not None:
-                store.add_result(step.index, step.result)
+            store.add_step(step, by_step.get(step.index))
         return store
+
+    @classmethod
+    def from_state(cls, state: RunState) -> EvidenceStore:
+        """`from_steps` over one run's state."""
+        return cls.from_steps(state.steps, state.observations)
 
     @property
     def spans(self) -> tuple[EvidenceSpan, ...]:
         return tuple(self._spans)
 
-    def add_result(self, step: int, result: ToolResult) -> int:
-        """Record the spans of one tool result; returns how many were added.
+    @property
+    def dropped(self) -> Mapping[int, int]:
+        """Step index -> spans its evidence result returned but the policy was
+        not shown in full (only steps that dropped at least one)."""
+        return MappingProxyType(self._dropped)
 
-        Failed results and tools outside `EVIDENCE_TOOLS` add nothing. A
-        successful evidence result is re-validated against its tool's output
-        model; a result that does not fit raises ``ValidationError``
-        (the executor validates outputs, so that is a bug, not evidence).
+    def add_step(self, step: StepRecord, observation: Observation | None) -> int:
+        """Record the fully shown spans of one step; returns how many were added.
+
+        Steps without a successful result from a tool in `EVIDENCE_TOOLS` add
+        nothing. ``observation`` must be the one the shaper made for this step
+        (``ValueError`` otherwise). A successful evidence result is
+        re-validated against its tool's output model; a result that does not
+        fit raises ``ValidationError`` (the executor validates outputs, so
+        that is a bug, not evidence).
         """
-        if not result.ok or result.output is None or result.tool not in EVIDENCE_TOOLS:
+        result = step.result
+        if result is None or not result.ok or result.output is None:
             return 0
+        if result.tool not in EVIDENCE_TOOLS:
+            return 0
+        if observation is not None and (
+            observation.step != step.index or observation.source != "tool"
+        ):
+            raise ValueError(
+                f"observation of step {observation.step} does not match step {step.index}"
+            )
         if result.tool == SEARCH_CORPUS:
             found = SearchCorpusOutput.model_validate(result.output)
             ranges = [(p.doc_id, p.content_hash, p.start_char, p.end_char) for p in found.passages]
+            shown = _shown_passages(observation, len(ranges))
         else:
             read = ReadDocumentOutput.model_validate(result.output)
             ranges = [(read.doc_id, read.content_hash, read.start_char, read.end_char)]
-        for doc_id, content_hash, start, end in ranges:
+            shown = 1 if observation is not None and observation.truncated_chars == 0 else 0
+        for doc_id, content_hash, start, end in ranges[:shown]:
             self._add(
                 EvidenceSpan(
-                    step=step,
+                    step=step.index,
                     tool=result.tool,
                     doc_id=doc_id,
                     content_hash=content_hash,
@@ -111,7 +152,9 @@ class EvidenceStore:
                     end_char=end,
                 )
             )
-        return len(ranges)
+        if shown < len(ranges):
+            self._dropped[step.index] = self._dropped.get(step.index, 0) + len(ranges) - shown
+        return shown
 
     def observed(self, doc_id: str, content_hash: str) -> tuple[tuple[int, int], ...]:
         """Merged observed ``[start, end)`` intervals of one document version."""
@@ -137,3 +180,13 @@ class EvidenceStore:
             else:
                 merged.append((lo, hi))
         self._merged[key] = merged
+
+
+def _shown_passages(observation: Observation | None, total: int) -> int:
+    """How many leading passages of a ``total``-passage search the policy saw in full."""
+    if observation is None:
+        return 0
+    if observation.shown_passages is not None:
+        return min(observation.shown_passages, total)
+    # Not shaped at passage boundaries: all or nothing.
+    return total if observation.truncated_chars == 0 else 0

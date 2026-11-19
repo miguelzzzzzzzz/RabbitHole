@@ -233,6 +233,12 @@ class Observation(BaseModel):
     ``text`` is the full observation, truncated to the shaper's limit
     (``truncated_chars`` says how much was cut). Once the observation is old
     it is *elided*: ``text`` becomes the one-line ``summary``.
+
+    ``shown_passages`` is set only for a successful ``search_corpus`` result:
+    the number of leading passages rendered in full (the rest were dropped
+    whole). Eliding keeps it and ``truncated_chars``, because they record
+    what the policy was shown when the observation was new (ADR-0004: a span
+    shown in full stays evidence after elision).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -242,12 +248,15 @@ class Observation(BaseModel):
     text: str
     summary: str = Field(min_length=1, pattern=r"^[^\n\r]*$")
     truncated_chars: Count = 0
+    shown_passages: Count | None = None
     elided: bool = False
 
     @model_validator(mode="after")
     def _elided_text_is_summary(self) -> Self:
         if self.elided and self.text != self.summary:
             raise ValueError("an elided observation's text is its summary")
+        if self.shown_passages is not None and self.source != "tool":
+            raise ValueError("only a tool observation can record shown_passages")
         return self
 
     def elide(self) -> Observation:
