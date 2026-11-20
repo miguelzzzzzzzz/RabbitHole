@@ -298,7 +298,8 @@ Scope
     `stale_source`.
   - Groundedness: the span lies inside text observed in this run's evidence
     store, which holds only spans shown to the policy in full (passage-boundary
-    cut of `search_corpus` observations with `shown_passages`; a truncated
+    cut of `search_corpus` observations with `shown_passages`, the omitted
+    passages located by `(doc_id, start_char, end_char)` only; a truncated
     `read_document` slice adds nothing; elision keeps evidence; ADR-0004
     amendment, 2026-11-19).
   - On an invalid or stale citation it returns feedback if the repair budget

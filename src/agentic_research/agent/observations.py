@@ -10,13 +10,26 @@ and verifiers.
   feedback. The text is cut to ``max_chars`` characters with an explicit
   ``...[truncated N chars]`` marker; ``truncated_chars`` records N.
 - A successful ``search_corpus`` result is cut at passage boundaries
-  instead: the longest prefix of its passages whose JSON fits in
-  ``max_chars`` is rendered, the rest are dropped whole and announced with
-  ``...[N passages omitted]``, and ``shown_passages`` records how many were
-  rendered. No passage is ever cut mid-text, so the evidence store can count
-  exactly the passages the policy saw (ADR-0004). If not even the result
-  with no passages fits (an absurdly long ``corpus_id``), the generic
-  character cut applies with ``shown_passages = 0``.
+  instead: the longest prefix of its passages that fits in ``max_chars``
+  together with the omission marker is rendered, the rest are dropped whole,
+  and ``shown_passages`` records how many were rendered. No passage is ever
+  cut mid-text, so the evidence store can count exactly the passages the
+  policy saw (ADR-0004). The marker names the omitted passages by location
+  only, best first, so the policy can fetch them with ``read_document``
+  even when no passage was shown::
+
+      ...[2 passages omitted; read_document(doc_id, start, end):
+      (0123456789abcdef, 0, 2400), (0123456789abcdef, 2401, 2600)]
+
+  (one line in the observation).
+
+  A locator carries no passage text, so it is not evidence. Locators that
+  do not fit are counted as ``+M more`` (the marker shrinks to the bare
+  ``...[N passages omitted]`` if no locator fits). A passage-cut observation
+  is never longer than ``max_chars``. If not even the result with no
+  passages plus the bare marker fits (an absurdly long ``corpus_id`` or a
+  tiny ``max_chars``), the generic character cut applies with
+  ``shown_passages = 0``.
 - Only the ``keep_recent`` newest observations keep their text. Older ones
   are elided to a one-line summary (step, tool, outcome, size) that contains
   no tool output.
@@ -33,6 +46,7 @@ guardrail work.
 from __future__ import annotations
 
 import json
+from collections.abc import Sequence
 from typing import Any, Literal
 
 from agentic_research.agent.actions import ToolCall
@@ -41,6 +55,8 @@ from agentic_research.tools.search import SEARCH_CORPUS
 
 TRUNCATION_MARKER = "...[truncated {n} chars]"
 PASSAGES_MARKER = "...[{n} {noun} omitted]"
+#: How the omission marker introduces the locators of omitted passages.
+LOCATOR_HINT = "read_document(doc_id, start, end)"
 _NAME_LIMIT = 64
 
 
@@ -58,9 +74,41 @@ def truncate(text: str, max_chars: int) -> tuple[str, int]:
     return text[:max_chars] + TRUNCATION_MARKER.format(n=dropped), dropped
 
 
-def passages_marker(omitted: int) -> str:
-    """The marker announcing ``omitted`` (>= 1) dropped passages."""
-    return PASSAGES_MARKER.format(n=omitted, noun="passage" if omitted == 1 else "passages")
+def passages_marker(
+    omitted: int,
+    locators: Sequence[tuple[str, int, int]] = (),
+    room: int | None = None,
+) -> str | None:
+    """The marker announcing ``omitted`` (>= 1) dropped passages.
+
+    ``locators`` are ``(doc_id, start_char, end_char)`` of (some of) the
+    omitted passages, best first. With ``room``, the marker lists as many of
+    them as fit in ``room`` characters (the rest as ``+M more``), falls back
+    to the bare marker, and is ``None`` if not even that fits. Without
+    ``room`` every locator is listed.
+    """
+    noun = "passage" if omitted == 1 else "passages"
+    bare = PASSAGES_MARKER.format(n=omitted, noun=noun)
+    for listed in range(len(locators), 0, -1):
+        items = [f"({d}, {s}, {e})" for d, s, e in locators[:listed]]
+        if listed < omitted:
+            items.append(f"+{omitted - listed} more")
+        marker = f"...[{omitted} {noun} omitted; {LOCATOR_HINT}: {', '.join(items)}]"
+        if room is None or len(marker) <= room:
+            return marker
+    return bare if room is None or len(bare) <= room else None
+
+
+def _locator(passage: Any) -> tuple[str, int, int] | None:
+    """``(doc_id, start_char, end_char)`` of a rendered passage, if it has them."""
+    if not isinstance(passage, dict):
+        return None
+    doc_id, start, end = passage.get("doc_id"), passage.get("start_char"), passage.get("end_char")
+    if not isinstance(doc_id, str) or not doc_id:
+        return None
+    if type(start) is not int or type(end) is not int:
+        return None
+    return doc_id, start, end
 
 
 def _canonical(value: Any) -> str:
@@ -132,6 +180,7 @@ class ObservationShaper:
         total = len(passages)
         full_body = _canonical(output)
         full_text = f"{SEARCH_CORPUS} ok: {full_body}"
+        located = [_locator(p) for p in passages]
         for shown in range(total, -1, -1):
             body = (
                 full_body
@@ -139,22 +188,36 @@ class ObservationShaper:
                 else _canonical({**output, "passages": passages[:shown]})
             )
             text = f"{SEARCH_CORPUS} ok: {body}"
-            if len(text) > self.max_chars:
-                continue
+            if shown == total:
+                if len(text) > self.max_chars:
+                    continue
+                marker = ""
+            else:
+                # Listed locators must be a leading run of the omitted passages,
+                # so "+M more" always means "the M after the listed ones".
+                locators: list[tuple[str, int, int]] = []
+                for loc in located[shown:]:
+                    if loc is None:
+                        break
+                    locators.append(loc)
+                fitted = passages_marker(total - shown, locators, self.max_chars - len(text))
+                if fitted is None:
+                    continue
+                marker = fitted
             dropped = len(full_text) - len(text)
             summary = f"{SEARCH_CORPUS} ok, {len(body)} chars elided"
             if shown < total:
                 summary += f", {shown} of {total} passages shown"
-                text += passages_marker(total - shown)
             return Observation(
                 step=step.index,
                 source="tool",
-                text=text,
+                text=text + marker,
                 summary=f"step {step.index}: {summary}",
                 truncated_chars=dropped,
                 shown_passages=shown,
             )
-        # Not even the passage-free result fits: character cut, no passage shown.
+        # Not even the passage-free result and the bare marker fit: character
+        # cut, no passage shown.
         cut = self._make(
             step, "tool", full_text, f"{SEARCH_CORPUS} ok, {len(full_body)} chars elided"
         )

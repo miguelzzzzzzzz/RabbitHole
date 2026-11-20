@@ -23,7 +23,9 @@ step's `Observation` next to its result:
 
 * ``search_corpus``: the shaper cuts at passage boundaries and records
   ``shown_passages``; only those leading passages become spans. The dropped
-  ones are counted in `EvidenceStore.dropped`.
+  ones are counted in `EvidenceStore.dropped`. The omission marker locates
+  them (doc id and offsets, no text); that is not evidence, but the policy
+  can read them with ``read_document``, and a slice shown in full counts.
 * ``read_document``: its slice counts only if the observation was not
   truncated (``truncated_chars == 0``). The 1500-character cap keeps plain
   prose with an ordinary ``source`` path below the shaper's default 2000

@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
+import re
 import threading
 from collections.abc import Mapping
 from pathlib import Path
 
 import pytest
 from pydantic import ValidationError
+from rag_engine.config import ChunkingConfig
 
 from agentic_research.agent import (
     AgentLoop,
@@ -21,6 +23,9 @@ from agentic_research.agent import (
     Task,
     ToolCall,
 )
+from agentic_research.agent.observations import LOCATOR_HINT
+from agentic_research.agent.policy import Decision
+from agentic_research.agent.state import RunState
 from agentic_research.backends import FixtureSearchBackend, Passage, SearchBackend, StoredDocument
 from agentic_research.backends.base import make_doc_id
 from agentic_research.backends.rag_engine import RagEngineBackend
@@ -338,10 +343,18 @@ def test_a_truncated_read_is_not_evidence() -> None:
     assert store.dropped == {2: 1}
 
 
-def test_a_result_without_an_observation_is_not_evidence() -> None:
-    store = EvidenceStore.from_steps([_step(0, _search_result(10, 10))], [])
+@pytest.mark.parametrize(
+    ("result", "dropped"),
+    [(_search_result(10, 10), 2), (_read(DOC, HASH_A, 0, 40), 1)],
+)
+def test_a_result_without_an_observation_is_not_evidence(result: ToolResult, dropped: int) -> None:
+    # The loop gives every tool result an observation; a step without one (a
+    # broken or hand-built state) was never shown, so it grounds nothing.
+    step = _step(0, result)
+    assert EvidenceStore().add_step(step, None) == 0
+    store = EvidenceStore.from_steps([step], [])
     assert store.spans == ()
-    assert store.dropped == {0: 2}
+    assert store.dropped == {0: dropped}
 
 
 def test_an_elided_observation_still_grounds() -> None:
@@ -406,7 +419,13 @@ async def test_nothing_past_the_cut_of_a_k10_search_counts(backend: SearchBacken
     assert obs.shown_passages is not None
     shown = obs.shown_passages
     assert 0 < shown < len(passages)
-    assert obs.text.endswith(f"[{len(passages) - shown} passages omitted]")
+    # The marker locates every omitted passage (no text), best first.
+    assert obs.text.endswith(
+        f"...[{len(passages) - shown} passages omitted; {LOCATOR_HINT}: "
+        + ", ".join(f"({p.doc_id}, {p.start_char}, {p.end_char})" for p in passages[shown:])
+        + "]"
+    )
+    assert len(obs.text) <= 2000
     store = EvidenceStore.from_state(state)
     assert [(s.doc_id, s.start_char, s.end_char) for s in store.spans] == [
         (p.doc_id, p.start_char, p.end_char) for p in passages[:shown]
@@ -488,3 +507,122 @@ async def test_a_full_length_prose_read_fits_the_default_observation() -> None:
     assert store.observed(prose_id, content_hash) == ((0, MAX_READ_CHARS),)
     assert store.observed(quotes_id, docs.document(quotes_id).content_hash) == ()
     assert store.dropped == {1: 1}
+
+
+# --- omitted passages: located, not evidence, recoverable ---------------------
+
+_LOCATOR = re.compile(r"\(([0-9a-f]{16}), (\d+), (\d+)\)")
+
+
+class _ReadsWhatWasOmitted:
+    """Searches once, then reads every passage the marker located, in
+    `MAX_READ_CHARS` pieces, then gives up. Holds no run state."""
+
+    def __init__(self, query: str, k: int) -> None:
+        self.search = ToolCall(tool="search_corpus", args={"query": query, "k": k})
+
+    async def next_action(self, state: RunState) -> ToolCall | FinalAnswer | GiveUp | Decision:
+        if not state.steps:
+            return self.search
+        marker = state.observations[0].text.rpartition("...[")[2]
+        reads = [
+            ToolCall(
+                tool="read_document",
+                args={"doc_id": doc_id, "start": lo, "end": min(lo + MAX_READ_CHARS, int(end))},
+            )
+            for doc_id, start, end in _LOCATOR.findall(marker)
+            for lo in range(int(start), int(end), MAX_READ_CHARS)
+        ]
+        done = len(state.steps) - 1
+        return reads[done] if done < len(reads) else GiveUp(reason="done")
+
+
+LONG = ("The Velmora arches were cleaned and repainted in grey during the long survey. " * 32)[
+    :2400
+].strip()
+
+
+async def test_a_search_that_shows_no_passage_can_be_recovered_with_read_document() -> None:
+    docs = FixtureSearchBackend("c", {"long.md": f"{LONG}\n\nThe arches are grey.\n"})
+    doc_id = make_doc_id("c", "long.md")
+    loop = AgentLoop(
+        _ReadsWhatWasOmitted("Velmora arches", k=2),
+        ToolExecutor(research_registry(docs)),
+        Budgets(max_steps=6),
+        run_id="r-recover",
+    )
+    state = await loop.run(TASK)
+    assert state.terminal_label == "abstained:done"
+    first = state.steps[0].result
+    assert first is not None
+    passages = SearchCorpusOutput.model_validate(first.output).passages
+    assert [len(p.text) for p in passages] == [len(LONG), len("The arches are grey.")]
+    obs = state.observations[0]
+    assert obs.shown_passages == 0  # the first passage alone is longer than 2000 chars
+    assert LONG[:50] not in obs.text and "are grey" not in obs.text  # located, not shown
+    # Two reads cover the long passage, one the short one.
+    assert [s.action.args for s in state.steps[1:4] if isinstance(s.action, ToolCall)] == [
+        {"doc_id": doc_id, "start": 0, "end": MAX_READ_CHARS},
+        {"doc_id": doc_id, "start": MAX_READ_CHARS, "end": len(LONG)},
+        {"doc_id": doc_id, "start": passages[1].start_char, "end": passages[1].end_char},
+    ]
+    content_hash = passages[0].content_hash
+    search_only = EvidenceStore.from_steps(state.steps[:1], state.observations[:1])
+    assert search_only.spans == ()  # the locators are not evidence
+    assert search_only.dropped == {0: 2}
+    store = EvidenceStore.from_state(state)
+    assert all(o.truncated_chars == 0 for o in state.observations[1:])
+    for p in passages:  # every omitted passage is grounded once read in full
+        assert store.covers(doc_id, content_hash, p.start_char, p.end_char)
+    assert [s.tool for s in store.spans] == ["read_document"] * 3
+
+
+def _gazetteer() -> str:
+    """One long paragraph of the fixture corpus's own prose (about 5.6
+    characters per whitespace token), long enough for full-size chunks."""
+    paragraphs = [
+        " ".join(block.split())
+        for path in sorted(FIXTURE_CORPUS.rglob("*.md"))
+        for block in re.split(r"\n\s*\n", path.read_text(encoding="utf-8"))
+        if block.strip() and not block.startswith("#")
+    ]
+    return "# Harrow Vale gazetteer\n\n" + " ".join(paragraphs * 4) + "\n"
+
+
+async def test_a_default_size_citationneeded_chunk_fits_the_default_observation(
+    tmp_path: Path,
+) -> None:
+    # CitationNeeded's default chunking (256 whitespace tokens) on prose like
+    # the fixture's: the best passage plus its JSON envelope and the omission
+    # marker fit in the shaper's default 2000 chars, so it is shown in full.
+    corpus = tmp_path / "corpus"
+    corpus.mkdir()
+    (corpus / "gazetteer.md").write_text(_gazetteer(), encoding="utf-8")
+    assert ChunkingConfig().chunk_size == 256
+    index = build_index(corpus, tmp_path / "index", "gazetteer", ChunkingConfig())
+    loop = AgentLoop(
+        OraclePolicy(
+            [
+                ToolCall(tool="search_corpus", args={"query": "Velmora Bridge Tarkand", "k": 5}),
+                GiveUp(reason="done"),
+            ]
+        ),
+        ToolExecutor(research_registry(RagEngineBackend(index, corpus_id="gazetteer"))),
+        Budgets(max_steps=3),
+        run_id="r-default-chunk",
+    )
+    state = await loop.run(TASK)
+    result = state.steps[0].result
+    assert result is not None
+    passages = SearchCorpusOutput.model_validate(result.output).passages
+    assert len(passages) > 1
+    # Near-full chunks: the chunker cuts at sentence ends at or below 256 tokens.
+    assert max(len(p.text.split()) for p in passages) >= 240
+    assert len(passages[0].text.split()) >= 240
+    obs = state.observations[0]
+    assert obs.shown_passages is not None and obs.shown_passages >= 1
+    assert len(obs.text) <= 2000
+    assert json.dumps(passages[0].text, ensure_ascii=False) in obs.text
+    first = passages[0]
+    store = EvidenceStore.from_state(state)
+    assert store.covers(first.doc_id, first.content_hash, first.start_char, first.end_char)

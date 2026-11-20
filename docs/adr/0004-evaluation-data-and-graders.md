@@ -74,6 +74,12 @@ offsets is error-prone because of escaping).
   passages that do not fit are dropped whole and announced
   (`...[N passages omitted]`), and the observation records
   `shown_passages`. No passage is cut mid-text.
+  - Note (2026-11-20, from Chad's spot-check of `d670ed4`): the marker also
+    lists the omitted passages' `(doc_id, start_char, end_char)`, best first
+    (no text, so not evidence), so a policy shown no passage at all can
+    recover with `read_document`. The marker counts against the limit;
+    locators that do not fit are counted as `+M more`, and the marker shrinks
+    to the bare count before another passage is dropped.
 - `read_document` keeps its slice cap (1500) below the shaper's default
   limit (2000) for plain prose; a slice that is truncated anyway (heavy JSON
   escaping) adds no evidence.

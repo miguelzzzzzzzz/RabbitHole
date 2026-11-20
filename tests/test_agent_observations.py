@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import pytest
@@ -237,44 +238,105 @@ def test_a_search_that_fits_is_shown_whole() -> None:
     assert obs.summary == f"step 1: search_corpus ok, {len(obs.text) - 18} chars elided"
 
 
+def _render(output: dict[str, Any], passages: list[Any]) -> str:
+    return f"{SEARCH_CORPUS} ok: " + json.dumps(
+        {**output, "passages": passages}, sort_keys=True, ensure_ascii=False, separators=(",", ":")
+    )
+
+
+DOC_ID = "0123456789abcdef"
+HINT = "read_document(doc_id, start, end)"
+
+
 def test_a_long_search_drops_whole_trailing_passages() -> None:
     step = _search(0, 50, 50, 50)
     assert step.result is not None and step.result.output is not None
     output = step.result.output
-    one = f"{SEARCH_CORPUS} ok: " + json.dumps(
-        {**output, "passages": output["passages"][:1]},
-        sort_keys=True,
-        ensure_ascii=False,
-        separators=(",", ":"),
-    )
-    full = f"{SEARCH_CORPUS} ok: " + json.dumps(
-        output, sort_keys=True, ensure_ascii=False, separators=(",", ":")
-    )
-    obs = ObservationShaper(max_chars=len(one) + 5).observe(step)  # room for 1, not 2
+    one = _render(output, output["passages"][:1])
+    full = _render(output, output["passages"])
+    marker = f"...[2 passages omitted; {HINT}: ({DOC_ID}, 200, 250), ({DOC_ID}, 300, 350)]"
+    obs = ObservationShaper(max_chars=len(one) + len(marker)).observe(step)  # room for 1, not 2
     assert obs is not None
-    body, marker = _split(obs.text)
+    body, rendered = _split(obs.text)
     assert body["passages"] == output["passages"][:1]  # the shown passage is intact
-    assert marker == "...[2 passages omitted]"
+    assert rendered == marker
+    assert len(obs.text) == len(one) + len(marker)  # the marker counts against max_chars
     assert obs.shown_passages == 1
     assert obs.truncated_chars == len(full) - len(one)
     assert obs.summary.endswith(", 1 of 3 passages shown")
 
 
-def test_one_omitted_passage_is_singular() -> None:
-    assert passages_marker(1) == "...[1 passage omitted]"
-    obs = ObservationShaper(max_chars=400).observe(_search(0, 10, 300))
+def test_locators_that_do_not_fit_are_counted_as_more() -> None:
+    step = _search(0, 50, 50, 50)
+    assert step.result is not None and step.result.output is not None
+    one = _render(step.result.output, step.result.output["passages"][:1])
+    marker = f"...[2 passages omitted; {HINT}: ({DOC_ID}, 200, 250), +1 more]"
+    obs = ObservationShaper(max_chars=len(one) + len(marker) + 5).observe(step)
     assert obs is not None
-    assert obs.text.endswith("...[1 passage omitted]")
+    assert obs.text == one + marker
     assert obs.shown_passages == 1
 
 
-def test_a_first_passage_too_long_shows_no_passage() -> None:
+def test_the_marker_shrinks_to_the_bare_count_before_a_passage_is_dropped() -> None:
+    step = _search(0, 50, 50)
+    assert step.result is not None and step.result.output is not None
+    one = _render(step.result.output, step.result.output["passages"][:1])
+    obs = ObservationShaper(max_chars=len(one) + len("...[1 passage omitted]")).observe(step)
+    assert obs is not None
+    assert obs.text == one + "...[1 passage omitted]"
+    assert obs.shown_passages == 1
+
+
+def test_passages_marker() -> None:
+    locs = [(DOC_ID, 0, 10), (DOC_ID, 20, 30)]
+    assert passages_marker(1) == "...[1 passage omitted]"
+    assert passages_marker(3) == "...[3 passages omitted]"
+    assert passages_marker(1, locs[:1]) == f"...[1 passage omitted; {HINT}: ({DOC_ID}, 0, 10)]"
+    full = f"...[3 passages omitted; {HINT}: ({DOC_ID}, 0, 10), ({DOC_ID}, 20, 30), +1 more]"
+    assert passages_marker(3, locs) == full
+    assert passages_marker(3, locs, room=len(full)) == full
+    assert passages_marker(3, locs, room=len(full) - 1) == (
+        f"...[3 passages omitted; {HINT}: ({DOC_ID}, 0, 10), +2 more]"
+    )
+    assert passages_marker(3, locs, room=23) == "...[3 passages omitted]"
+    assert passages_marker(3, locs, room=22) is None
+
+
+def test_one_omitted_passage_is_singular() -> None:
+    obs = ObservationShaper(max_chars=450).observe(_search(0, 10, 300))
+    assert obs is not None
+    assert obs.text.endswith(f"...[1 passage omitted; {HINT}: ({DOC_ID}, 200, 500)]")
+    assert obs.shown_passages == 1
+
+
+def test_a_first_passage_too_long_shows_no_passage_but_locates_it() -> None:
     obs = ObservationShaper(max_chars=200).observe(_search(0, 500, 10))
     assert obs is not None
     body, marker = _split(obs.text)
     assert body == {"corpus_id": CORPUS, "passages": []}
-    assert marker == "...[2 passages omitted]"
+    assert marker == f"...[2 passages omitted; {HINT}: ({DOC_ID}, 100, 600), ({DOC_ID}, 200, 210)]"
+    assert "p" * 10 not in obs.text  # locators carry no passage text
     assert obs.shown_passages == 0
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "not a dict",
+        {"doc_id": "", "start_char": 0, "end_char": 5},
+        {"doc_id": DOC_ID, "start_char": "0", "end_char": 5},
+        {"doc_id": DOC_ID, "start_char": 0, "end_char": True},
+    ],
+)
+def test_locators_stop_at_a_passage_without_a_location(bad: Any) -> None:
+    # The executor validates search_corpus outputs, so this is defensive only:
+    # the listed locators stay a leading run of the omitted passages.
+    good = _passage(2, 10)
+    step = _ok(0, {"corpus_id": CORPUS, "passages": [_passage(1, 500), bad, good]}, SEARCH_CORPUS)
+    obs = ObservationShaper(max_chars=250).observe(step)
+    assert obs is not None
+    assert obs.shown_passages == 0
+    assert obs.text.endswith(f"...[3 passages omitted; {HINT}: ({DOC_ID}, 100, 600), +2 more]")
 
 
 def test_a_search_with_no_room_even_for_its_envelope_falls_back_to_a_char_cut() -> None:
@@ -332,15 +394,26 @@ def test_property_passage_cut_is_maximal_and_never_mid_passage(
     if obs.text.endswith("chars]"):  # envelope alone too long: char cut, nothing shown
         assert shown == 0
         return
+    assert len(obs.text) <= max_chars  # a passage cut, marker included, stays in the limit
     body, marker = _split(obs.text)
     assert body["passages"] == passages[:shown]  # whole passages, in order
-    assert len(obs.text) - len(marker) <= max_chars
-    assert marker == ("" if shown == len(passages) else passages_marker(len(passages) - shown))
-    if shown < len(passages):  # one more passage would not have fit
-        more = json.dumps(
-            {"corpus_id": CORPUS, "passages": passages[: shown + 1]},
-            sort_keys=True,
-            ensure_ascii=False,
-            separators=(",", ":"),
-        )
-        assert len(f"{SEARCH_CORPUS} ok: {more}") > max_chars
+    omitted = len(passages) - shown
+    if omitted == 0:
+        assert marker == ""
+        return
+    bare = passages_marker(omitted)
+    assert bare is not None
+    room = max_chars - (len(obs.text) - len(marker))
+    if marker != bare:  # locators are the leading omitted passages, as many as fit
+        listed = re.findall(r"\(([0-9a-f]{16}), (\d+), (\d+)\)", marker)
+        assert [(d, int(a), int(b)) for d, a, b in listed] == [
+            (p["doc_id"], p["start_char"], p["end_char"]) for p in passages[shown:][: len(listed)]
+        ]
+        more = omitted - len(listed)
+        assert marker.endswith(f", +{more} more]" if more else ")]")
+    locs = [(p["doc_id"], p["start_char"], p["end_char"]) for p in passages[shown:]]
+    assert marker == passages_marker(omitted, locs, room)
+    # One more passage (with at least the bare marker after it) would not have fit.
+    after = passages_marker(omitted - 1) if omitted > 1 else ""
+    assert after is not None
+    assert len(_render(body, passages[: shown + 1])) + len(after) > max_chars
