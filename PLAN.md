@@ -290,7 +290,9 @@ Scope
   - `fetch_url(url)` serves the fixture map by default and does live HTTP
     only when `ARP_ALLOW_LIVE_FETCH=true` and the host is allowlisted.
     Output is HTML-to-text with offsets.
-  - `final_answer(answer, claims[{text, citations[{source_id, start, end, quote, content_hash?}]}])`.
+  - `final_answer(answer, claims[{text, citations[{doc_id, start, end, quote, content_hash?}]}])`
+    (`FinalAnswer.claims`, `Claim`, `Citation`; 2026-11-21: `doc_id` rather
+    than `source_id`, the same id `search_corpus` and `read_document` use).
 - `CitationVerifier`:
   - Validity: quote equals `documents.jsonl` normalized text at
     `[start_char:end_char]` exactly (not raw-file bytes).
@@ -304,6 +306,14 @@ Scope
     amendment, 2026-11-19).
   - On an invalid or stale citation it returns feedback if the repair budget
     remains, otherwise the run fails.
+  - Built 2026-11-21 (`agentic_research.citations.CitationVerifier`): an
+    answer needs at least one claim, every claim at least one citation, and
+    every citation must pass, checked in the order known `doc_id`
+    (`invalid_citation`), freshness (`stale_source`), exact quote at the
+    offsets (`invalid_citation`), groundedness (`ungrounded_citation`); no
+    claims or an uncited claim is `no_citation`. Feedback lists issues by
+    position with offsets only, never document text. Answer correctness is
+    the graders' job (M4).
 - Guardrails:
   - Tool outputs are wrapped in an untrusted-data envelope in prompts.
   - An injected-instruction detector (pattern-based, conservative) flags
@@ -338,6 +348,11 @@ Acceptance criteria
   - Hybrid-mode nonsense query: search returns `k` passages, the scripted
     policy gives up, and the run ends `abstained`. A scripted policy that
     answers instead is rejected by the verifier for ungrounded citations.
+    (Tested 2026-11-21: an uncited answer is `no_citation`, a citation of
+    text not shown is `ungrounded_citation`, and the run ends
+    `budget_exhausted:repairs`. A valid citation of one of the shown
+    neighbours would pass the verifier; rejecting a wrong answer is the
+    graders' job.)
   - Repairs exhausted on an unanswerable task are graded as not abstained.
   - A search result cut mid-list: citations of shown passages are grounded,
     citations of omitted passages are rejected as `ungrounded_citation`

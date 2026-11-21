@@ -23,13 +23,13 @@ from agentic_research.agent import (
     Task,
     ToolCall,
 )
+from agentic_research.agent.evidence import EvidenceSpan, EvidenceStore
 from agentic_research.agent.observations import LOCATOR_HINT
 from agentic_research.agent.policy import Decision
 from agentic_research.agent.state import RunState
 from agentic_research.backends import FixtureSearchBackend, Passage, SearchBackend, StoredDocument
 from agentic_research.backends.base import make_doc_id
 from agentic_research.backends.rag_engine import RagEngineBackend
-from agentic_research.evidence import EvidenceSpan, EvidenceStore
 from agentic_research.policies.oracle import OraclePolicy
 from agentic_research.tools import ToolError, ToolExecutor, ToolRegistry, ToolResult
 from agentic_research.tools.base import ErrorClass

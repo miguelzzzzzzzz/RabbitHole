@@ -85,8 +85,9 @@ offsets is error-prone because of escaping).
   escaping) adds no evidence.
 - The evidence store reads each step's observation and adds only fully
   shown spans; steps without an observation add nothing. Dropped spans are
-  counted per step (the trace field `evidence_dropped_truncated` comes with
-  the verifier slice).
+  counted per step: the loop puts an `evidence_dropped_truncated` step
+  event (`tool`, `shown`, `dropped`) on every step that dropped spans,
+  including a result that got no observation (added 2026-11-21).
 - Later elision does not remove evidence: once shown in full, a span stays
   observed after its observation is elided to a summary. Elision is context
   management; the model did see the text.

@@ -1,7 +1,7 @@
 """The per-run evidence store: which spans of which documents a run has seen.
 
-The citation verifier (next M3 slice) counts a cited span as *grounded* only
-if it lies inside text this run observed. The store is built from the run's
+The citation verifier (`agentic_research.citations`) counts a cited span as
+*grounded* only if it lies inside text this run observed. The store is built from the run's
 recorded steps, not filled in by the tools, so it holds exactly the tool
 results the loop accepted and handed to the policy. A search that timed out
 (its worker thread may still have finished), was refused by a guardrail or
@@ -32,13 +32,17 @@ step's `Observation` next to its result:
   (tested), but JSON escaping (quotes,
   newlines, control characters) can still push a slice over; such a slice
   adds nothing. There is no partial-span credit.
-* A step with a result but no observation adds nothing.
+* A step with a result but no observation adds nothing; all of its spans
+  count as dropped, and the loop traces them. (The default shaper gives
+  every tool result an observation; this happens with a custom shaper or
+  hand-built steps.)
 * Later elision does not remove evidence: an elided observation keeps
   ``truncated_chars`` and ``shown_passages``, so text shown in full once
   stays observed.
 
-This is separate from ``RunState.evidence`` (an M2 placeholder the loop does
-not fill), which the ``final_answer`` slice will replace or remove.
+`step_evidence` is the per-step rule; the loop uses it to put an
+``evidence_dropped_truncated`` event on every step that dropped spans, so a
+trace shows how often truncation cost grounding (ADR-0004).
 """
 
 from __future__ import annotations
@@ -53,7 +57,7 @@ from agentic_research.agent.state import Observation, RunState, StepRecord
 from agentic_research.tools.read import READ_DOCUMENT, ReadDocumentOutput
 from agentic_research.tools.search import SEARCH_CORPUS, SearchCorpusOutput
 
-__all__ = ["EVIDENCE_TOOLS", "EvidenceSpan", "EvidenceStore"]
+__all__ = ["EVIDENCE_TOOLS", "EvidenceSpan", "EvidenceStore", "step_evidence"]
 
 #: Tools whose successful results are evidence.
 EVIDENCE_TOOLS: Final = frozenset({SEARCH_CORPUS, READ_DOCUMENT})
@@ -115,48 +119,13 @@ class EvidenceStore:
         return MappingProxyType(self._dropped)
 
     def add_step(self, step: StepRecord, observation: Observation | None) -> int:
-        """Record the fully shown spans of one step; returns how many were added.
-
-        Steps without a successful result from a tool in `EVIDENCE_TOOLS` add
-        nothing. ``observation`` must be the one the shaper made for this step
-        (``ValueError`` otherwise). A successful evidence result is
-        re-validated against its tool's output model; a result that does not
-        fit raises ``ValidationError`` (the executor validates outputs, so
-        that is a bug, not evidence).
-        """
-        result = step.result
-        if result is None or not result.ok or result.output is None:
-            return 0
-        if result.tool not in EVIDENCE_TOOLS:
-            return 0
-        if observation is not None and (
-            observation.step != step.index or observation.source != "tool"
-        ):
-            raise ValueError(
-                f"observation of step {observation.step} does not match step {step.index}"
-            )
-        if result.tool == SEARCH_CORPUS:
-            found = SearchCorpusOutput.model_validate(result.output)
-            ranges = [(p.doc_id, p.content_hash, p.start_char, p.end_char) for p in found.passages]
-            shown = _shown_passages(observation, len(ranges))
-        else:
-            read = ReadDocumentOutput.model_validate(result.output)
-            ranges = [(read.doc_id, read.content_hash, read.start_char, read.end_char)]
-            shown = 1 if observation is not None and observation.truncated_chars == 0 else 0
-        for doc_id, content_hash, start, end in ranges[:shown]:
-            self._add(
-                EvidenceSpan(
-                    step=step.index,
-                    tool=result.tool,
-                    doc_id=doc_id,
-                    content_hash=content_hash,
-                    start_char=start,
-                    end_char=end,
-                )
-            )
-        if shown < len(ranges):
-            self._dropped[step.index] = self._dropped.get(step.index, 0) + len(ranges) - shown
-        return shown
+        """Record the fully shown spans of one step (`step_evidence`); returns how many."""
+        spans, dropped = step_evidence(step, observation)
+        for span in spans:
+            self._add(span)
+        if dropped:
+            self._dropped[step.index] = self._dropped.get(step.index, 0) + dropped
+        return len(spans)
 
     def observed(self, doc_id: str, content_hash: str) -> tuple[tuple[int, int], ...]:
         """Merged observed ``[start, end)`` intervals of one document version."""
@@ -182,6 +151,47 @@ class EvidenceStore:
             else:
                 merged.append((lo, hi))
         self._merged[key] = merged
+
+
+def step_evidence(
+    step: StepRecord, observation: Observation | None
+) -> tuple[tuple[EvidenceSpan, ...], int]:
+    """``(spans shown in full, spans dropped)`` for one step.
+
+    Steps without a successful result from a tool in `EVIDENCE_TOOLS` give
+    ``((), 0)``. ``observation`` must be the one the shaper made for this
+    step (``ValueError`` otherwise). A successful evidence result is
+    re-validated against its tool's output model; a result that does not fit
+    raises ``ValidationError`` (the executor validates outputs, so that is a
+    bug, not evidence).
+    """
+    result = step.result
+    if result is None or not result.ok or result.output is None:
+        return (), 0
+    if result.tool not in EVIDENCE_TOOLS:
+        return (), 0
+    if observation is not None and (observation.step != step.index or observation.source != "tool"):
+        raise ValueError(f"observation of step {observation.step} does not match step {step.index}")
+    if result.tool == SEARCH_CORPUS:
+        found = SearchCorpusOutput.model_validate(result.output)
+        ranges = [(p.doc_id, p.content_hash, p.start_char, p.end_char) for p in found.passages]
+        shown = _shown_passages(observation, len(ranges))
+    else:
+        read = ReadDocumentOutput.model_validate(result.output)
+        ranges = [(read.doc_id, read.content_hash, read.start_char, read.end_char)]
+        shown = 1 if observation is not None and observation.truncated_chars == 0 else 0
+    spans = tuple(
+        EvidenceSpan(
+            step=step.index,
+            tool=result.tool,
+            doc_id=doc_id,
+            content_hash=content_hash,
+            start_char=start,
+            end_char=end,
+        )
+        for doc_id, content_hash, start, end in ranges[:shown]
+    )
+    return spans, len(ranges) - shown
 
 
 def _shown_passages(observation: Observation | None, total: int) -> int:

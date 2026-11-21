@@ -15,7 +15,8 @@ from agentic_research.agent import (
     BudgetCounters,
     BudgetKind,
     Budgets,
-    Evidence,
+    Citation,
+    Claim,
     FinalAnswer,
     GiveUp,
     Policy,
@@ -41,7 +42,15 @@ def _state() -> RunState:
     "action",
     [
         ToolCall(tool="calculator", args={"expression": "2+2"}),
-        FinalAnswer(answer="4", evidence_ids=("e1",)),
+        FinalAnswer(
+            answer="4",
+            claims=(
+                Claim(
+                    text="2+2 is 4",
+                    citations=(Citation(doc_id="0123456789abcdef", start=3, end=8, quote="2+2=4"),),
+                ),
+            ),
+        ),
         GiveUp(reason="no_evidence", message="nothing found"),
     ],
 )
@@ -58,6 +67,20 @@ def test_action_round_trips_to_the_same_class(action: Any) -> None:
         {"kind": "tool_call", "tool": ""},
         {"kind": "tool_call", "tool": "x", "extra": 1},
         {"kind": "final_answer", "answer": ""},
+        {"kind": "final_answer", "answer": "4", "evidence_ids": ["e1"]},  # M2 placeholder, gone
+        *(
+            {"kind": "final_answer", "answer": "4", "claims": [{"text": "4", "citations": [c]}]}
+            for c in (
+                {"doc_id": "d", "start": 5, "end": 5, "quote": "x"},  # empty range
+                {"doc_id": "d", "start": 6, "end": 5, "quote": "x"},
+                {"doc_id": "d", "start": -1, "end": 5, "quote": "x"},
+                {"doc_id": "d", "start": 0, "end": 1, "quote": ""},
+                {"doc_id": "", "start": 0, "end": 1, "quote": "x"},
+                {"doc_id": "d", "start": 0, "end": 1, "quote": "x", "content_hash": "abc"},
+                {"doc_id": "d", "start": 0, "end": 1, "quote": "x", "page": 1},
+            )
+        ),
+        {"kind": "final_answer", "answer": "4", "claims": [{"text": "", "citations": []}]},
         {"kind": "give_up", "reason": "Not A Code"},
         {"tool": "x"},
     ],
@@ -180,7 +203,7 @@ def test_exhausted_matches_the_definition(calls: list[str], total: int, per_tool
 def test_new_state_is_running_with_empty_collections() -> None:
     s = _state()
     assert (s.status, s.terminal, s.terminal_label) == (RunStatus.RUNNING, False, "running")
-    assert not (s.plan or s.messages or s.evidence or s.steps)
+    assert not (s.plan or s.messages or s.steps or s.observations)
 
 
 def test_add_step_assigns_contiguous_indexes() -> None:
@@ -260,7 +283,6 @@ def test_full_state_round_trips_through_json() -> None:
     s = _state()
     s.plan = ["look it up", "compute"]
     s.messages = [ChatMessage(role="user", content="What is 2+2?")]
-    s.evidence["e1"] = Evidence(id="e1", source="calculator", text="4")
     s.counters.count_tool_call("calculator")
     s.counters.steps = 2
     s.counters.tokens = 31
@@ -269,7 +291,12 @@ def test_full_state_round_trips_through_json() -> None:
         ToolCall(tool="calculator", args={"expression": "2+2"}),
         ToolResult(tool="calculator", output={"value": 4}),
     )
-    s.add_step(FinalAnswer(answer="4", evidence_ids=("e1",)))
+    s.add_step(
+        FinalAnswer(
+            answer="4",
+            claims=(Claim(text="4", citations=(Citation(doc_id="d", start=0, end=1, quote="4"),)),),
+        )
+    )
     s.finish(RunStatus.SUCCEEDED, answer="4")
     again = RunState.from_json(s.to_json())
     assert again == s

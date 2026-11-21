@@ -26,10 +26,13 @@ run (run, step, provider-call and per-attempt tool spans), and `arp run
 backend contract (`Passage`, `SearchBackend`) with a `RagEngineBackend`
 adapter over a CitationNeeded `v1.0.0` format-2 index and a
 `FixtureSearchBackend` for unit tests, the `search_corpus` and
-`read_document` tools over it, and a per-run evidence store of the spans the
+`read_document` tools over it, a per-run evidence store of the spans the
 policy was shown in full (long search observations are cut at passage
-boundaries; a truncated slice grounds nothing).
-Not built yet: model-backed `arp run` providers, `fetch_url`, `final_answer`, the citation verifier, `arp run` over a corpus, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
+boundaries; a truncated slice grounds nothing), and `final_answer` claims
+with citations checked by a `CitationVerifier` plugged into the loop
+(exact normalized text, `content_hash` freshness, groundedness in the
+evidence store; a rejection is repair feedback).
+Not built yet: model-backed `arp run` providers, `final_answer` in the LLM policy's reply format, `fetch_url`, `arp run` over a corpus, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
 
 ## Architecture
 
@@ -50,7 +53,8 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | Run tracing, `arp run`, `arp trace show` | every run writes a trace v1 file; scripted provider only (no model) | built (M2) |
 | Search backends | `SearchBackend` contract; `RagEngineBackend` over a [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0` index (format 2, explicit `corpus_id`, BM25 default, hybrid option, `search --json` `schema_version` gate); `FixtureSearchBackend` for tests | built (M3, in progress) |
 | Research tools | `search_corpus` (top-k passages with citation fields) and `read_document` (bounded slice of the normalized stored text) over any `SearchBackend`, run in a worker thread; `EvidenceStore` of the spans a run's policy was shown in full, built from its recorded steps and observations (search observations cut at passage boundaries) | built (M3, in progress) |
-| Citations, `fetch_url`, guardrails | `final_answer` with claims checked against exact observed spans; fixture-backed `fetch_url`; allowlists and injection flags | M3 |
+| Citations | `FinalAnswer.claims` with `Citation`s (`doc_id`, `start`, `end`, `quote`, optional `content_hash`); `CitationVerifier` rejects `no_citation`, `invalid_citation` (unknown doc, offsets, quote), `stale_source` and `ungrounded_citation` with repair feedback; `evidence_dropped_truncated` trace events | built (M3, in progress) |
+| `fetch_url`, guardrails | fixture-backed `fetch_url`; allowlists and injection flags | M3 |
 | Task suites, graders, eval runner | programmatic trajectory graders; oracle and heuristic baselines | M4 |
 | Local LLM policy, record/replay | live runs on the local model; cassettes replay in CI | M5 |
 | Fault injection, ablations | tool errors, timeouts, malformed output, prompt injection | M6 |

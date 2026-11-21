@@ -146,16 +146,6 @@ class Task(BaseModel):
     task_id: str | None = None
 
 
-class Evidence(BaseModel):
-    """One piece of evidence gathered by a tool, addressable by ``id``."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    id: str = Field(min_length=1)
-    source: str = Field(min_length=1)
-    text: str
-
-
 class Verdict(BaseModel):
     """A verifier's decision on a `FinalAnswer`.
 
@@ -272,7 +262,6 @@ class RunState(BaseModel):
     task: Task
     plan: list[str] = Field(default_factory=list)
     messages: list[ChatMessage] = Field(default_factory=list)
-    evidence: dict[str, Evidence] = Field(default_factory=dict)
     steps: list[StepRecord] = Field(default_factory=list)
     observations: list[Observation] = Field(default_factory=list)
     counters: BudgetCounters = Field(default_factory=BudgetCounters)

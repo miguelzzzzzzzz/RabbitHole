@@ -62,6 +62,15 @@ Tracing (`agentic_research.agent.tracing`, ADR-0008): `AgentLoop.run_traced`
 returns the final state plus a trace with a span for the run, every step,
 every provider call the policy reports and every tool attempt; `run` is the
 same loop without returning the trace.
+A tool step whose evidence result returned spans the policy was not shown in
+full (passages dropped from a cut ``search_corpus`` observation, a truncated
+``read_document`` slice; `agentic_research.agent.evidence`) gets an
+``evidence_dropped_truncated`` step event with ``tool``, ``shown`` and
+``dropped`` counts (ADR-0004), so a trace shows when truncation cost
+grounding. A successful result under an evidence tool's name whose output
+does not fit that tool's model (a foreign tool registered as
+``search_corpus``) gets an ``evidence_unreadable`` event instead of crashing
+the loop.
 """
 
 from __future__ import annotations
@@ -73,6 +82,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from agentic_research.agent.actions import FinalAnswer, GiveUp, ToolCall
+from agentic_research.agent.evidence import step_evidence
 from agentic_research.agent.guards import LOOP, LOOP_DETECTED, LoopCheck, LoopGuard
 from agentic_research.agent.observations import ObservationShaper
 from agentic_research.agent.policy import Decision, Policy, PolicyFailure, ProviderCallInfo
@@ -80,8 +90,10 @@ from agentic_research.agent.state import (
     BudgetKind,
     Budgets,
     Guardrail,
+    Observation,
     RunState,
     RunStatus,
+    StepRecord,
     Task,
     Verdict,
 )
@@ -98,6 +110,10 @@ VERIFIER_ERROR = "verifier_error"
 VERIFIER_TIMEOUT = "verifier_timeout"
 ANSWER_AFTER_DEADLINE = "answer_after_deadline"
 LATE_RESULT_IGNORED = "late_result_ignored"
+#: Step event: an evidence tool returned spans the policy was not shown in full.
+EVIDENCE_DROPPED_TRUNCATED = "evidence_dropped_truncated"
+#: Step event: a result under an evidence tool's name does not fit that tool's output.
+EVIDENCE_UNREADABLE = "evidence_unreadable"
 DEFAULT_LOOP_GUARD = LoopGuard()
 _RUN_ID_RE = re.compile(r"[A-Za-z0-9_.:-]{1,64}")
 
@@ -371,7 +387,23 @@ class AgentLoop:
         counters.count_tool_call(action.tool)
         counters.tool_attempts += len(execution.attempts)
         counters.backoff_s += execution.total_backoff_s
-        self._record(state, action, result=execution.result)
+        record, observation = self._record(state, action, result=execution.result)
+        try:
+            spans, dropped = step_evidence(record, observation)
+        except ValueError:  # pydantic's ValidationError included
+            # A tool registered under an evidence tool's name with another output
+            # model: not evidence. The loop does not crash; the citation
+            # verifier will refuse to verify this run (failed:verifier_error).
+            rec.step_event(EVIDENCE_UNREADABLE, at=None, tool=action.tool)
+            return
+        if dropped:
+            rec.step_event(
+                EVIDENCE_DROPPED_TRUNCATED,
+                at=None,
+                tool=action.tool,
+                shown=len(spans),
+                dropped=dropped,
+            )
 
     def _record(
         self,
@@ -381,12 +413,13 @@ class AgentLoop:
         result: ToolResult | None = None,
         verdict: Verdict | None = None,
         guardrail: Guardrail | None = None,
-    ) -> None:
+    ) -> tuple[StepRecord, Observation | None]:
         record = state.add_step(action, result=result, verdict=verdict, guardrail=guardrail)
         state.counters.steps += 1
         observation = self._shaper.observe(record)
         if observation is not None:
             self._shaper.add(state.observations, observation)
+        return record, observation
 
 
 def _policy_timed_out(limit: float | None, deadline_binds: bool, *, tokens: int = 0) -> _Stop:

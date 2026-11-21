@@ -4,13 +4,18 @@
 JSON into the right class. This `ToolCall` is the agent's *intent* (tool name
 plus arguments); it is distinct from the wire-level
 `agentic_research.providers.types.ToolCall` a provider returns.
+
+A `FinalAnswer` carries structured ``claims``, each backed by `Citation`s
+into the normalized stored text of a corpus document (PLAN M3). The models
+only check shape; whether a citation is valid, fresh and grounded is the
+citation verifier's job (`agentic_research.citations`).
 """
 
 from __future__ import annotations
 
-from typing import Annotated, Any, Literal
+from typing import Annotated, Any, Literal, Self
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 _CODE_PATTERN = r"^[a-z][a-z0-9_]*$"
 
@@ -27,12 +32,49 @@ class ToolCall(_Action):
     args: dict[str, Any] = Field(default_factory=dict)
 
 
+class Citation(BaseModel):
+    """``quote`` is claimed to be ``text[start:end]`` of document ``doc_id``.
+
+    Offsets index the document's *normalized* stored text (CitationNeeded
+    index format 2), the same offsets ``search_corpus`` and ``read_document``
+    return. ``content_hash``, when given, names the document version the
+    quote was taken from.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    doc_id: str = Field(min_length=1, max_length=64)
+    start: int = Field(ge=0)
+    end: int = Field(ge=1)
+    quote: str = Field(min_length=1)
+    content_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+
+    @model_validator(mode="after")
+    def _check_range(self) -> Self:
+        if self.end <= self.start:
+            raise ValueError("end must be > start")
+        return self
+
+
+class Claim(BaseModel):
+    """One statement of the answer and the citations that support it."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    text: str = Field(min_length=1)
+    citations: tuple[Citation, ...] = ()
+
+
 class FinalAnswer(_Action):
-    """Answer the task. ``evidence_ids`` name entries in the run's evidence store."""
+    """Answer the task; ``claims`` back the answer with citations.
+
+    An answer without claims (or a claim without citations) is well formed
+    here; the citation verifier rejects it as ``no_citation``.
+    """
 
     kind: Literal["final_answer"] = "final_answer"
     answer: str = Field(min_length=1)
-    evidence_ids: tuple[str, ...] = ()
+    claims: tuple[Claim, ...] = ()
 
 
 class GiveUp(_Action):

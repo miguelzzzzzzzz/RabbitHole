@@ -1,6 +1,6 @@
-"""Agent core: actions, run state, budgets, policy and verifier hooks, and the loop (M2)."""
+"""Agent core: actions, run state, budgets, policy and verifier hooks, evidence, and the loop."""
 
-from agentic_research.agent.actions import Action, FinalAnswer, GiveUp, ToolCall
+from agentic_research.agent.actions import Action, Citation, Claim, FinalAnswer, GiveUp, ToolCall
 from agentic_research.agent.guards import LoopCheck, LoopGuard, call_key, canonical_args
 from agentic_research.agent.loop import AgentLoop
 from agentic_research.agent.observations import ObservationShaper
@@ -9,7 +9,6 @@ from agentic_research.agent.state import (
     BudgetCounters,
     BudgetKind,
     Budgets,
-    Evidence,
     Guardrail,
     Observation,
     RunState,
@@ -27,8 +26,9 @@ __all__ = [
     "BudgetCounters",
     "BudgetKind",
     "Budgets",
+    "Citation",
+    "Claim",
     "Decision",
-    "Evidence",
     "FinalAnswer",
     "GiveUp",
     "Guardrail",
