@@ -314,6 +314,15 @@ Scope
     claims or an uncited claim is `no_citation`. Feedback lists issues by
     position with offsets only, never document text. Answer correctness is
     the graders' job (M4).
+  - Contract (ADR-0004 amendment, 2026-11-22): every claim cited, every
+    citation valid. The verifier checks citation validity, freshness and
+    shown-grounding only, with no entailment check, so "verified" is not
+    "correct"; M4 labels `answered_when_unanswerable` and
+    `wrong_answer_valid_citations`.
+  - The loop refuses a registry whose `search_corpus`/`read_document` has
+    another output model (evidence is read by tool name), and a tool
+    swapped in later ends the run `failed:evidence_unreadable`, so an
+    unreadable run never ends `abstained` (2026-11-22, Chad's spot-check).
 - Guardrails:
   - Tool outputs are wrapped in an untrusted-data envelope in prompts.
   - An injected-instruction detector (pattern-based, conservative) flags

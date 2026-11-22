@@ -100,6 +100,11 @@ class ToolExecutor:
         self._sleeper = sleeper
 
     @property
+    def registry(self) -> ToolRegistry:
+        """The tools this executor runs (the agent loop checks evidence tools at start)."""
+        return self._registry
+
+    @property
     def clock(self) -> Clock:
         """The clock deadlines are measured on; the agent loop shares it."""
         return self._clock

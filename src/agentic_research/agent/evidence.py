@@ -42,7 +42,16 @@ step's `Observation` next to its result:
 
 `step_evidence` is the per-step rule; the loop uses it to put an
 ``evidence_dropped_truncated`` event on every step that dropped spans, so a
-trace shows how often truncation cost grounding (ADR-0004).
+trace shows how often truncation cost grounding (ADR-0004). The event's
+``reason`` is `drop_reason`: ``truncated`` (the observation was cut) or
+``no_observation`` (the result got none).
+
+Evidence is read from a result by its tool's *name*, so a tool registered
+under an evidence name must return that tool's output model.
+`misconfigured_evidence_tools` lists the ones that do not; the loop refuses
+to start with such a registry (Chad's spot-check of ``4444938``): a run whose
+evidence cannot be read must not end ``abstained`` just because the policy
+gave up.
 """
 
 from __future__ import annotations
@@ -54,13 +63,32 @@ from typing import Final, Self
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from agentic_research.agent.state import Observation, RunState, StepRecord
+from agentic_research.tools.base import ToolOutput
 from agentic_research.tools.read import READ_DOCUMENT, ReadDocumentOutput
 from agentic_research.tools.search import SEARCH_CORPUS, SearchCorpusOutput
 
-__all__ = ["EVIDENCE_TOOLS", "EvidenceSpan", "EvidenceStore", "step_evidence"]
+__all__ = [
+    "DROPPED_NO_OBSERVATION",
+    "DROPPED_TRUNCATED",
+    "EVIDENCE_OUTPUTS",
+    "EVIDENCE_TOOLS",
+    "EvidenceSpan",
+    "EvidenceStore",
+    "drop_reason",
+    "misconfigured_evidence_tools",
+    "step_evidence",
+]
 
+#: The output model each evidence tool must return; its results are read with it.
+EVIDENCE_OUTPUTS: Final[Mapping[str, type[ToolOutput]]] = MappingProxyType(
+    {SEARCH_CORPUS: SearchCorpusOutput, READ_DOCUMENT: ReadDocumentOutput}
+)
 #: Tools whose successful results are evidence.
-EVIDENCE_TOOLS: Final = frozenset({SEARCH_CORPUS, READ_DOCUMENT})
+EVIDENCE_TOOLS: Final = frozenset(EVIDENCE_OUTPUTS)
+#: Why a step dropped spans: its observation was cut (passages omitted, slice truncated).
+DROPPED_TRUNCATED: Final = "truncated"
+#: Why a step dropped spans: its result got no observation at all.
+DROPPED_NO_OBSERVATION: Final = "no_observation"
 
 
 class EvidenceSpan(BaseModel):
@@ -192,6 +220,35 @@ def step_evidence(
         for doc_id, content_hash, start, end in ranges[:shown]
     )
     return spans, len(ranges) - shown
+
+
+def drop_reason(observation: Observation | None) -> str:
+    """Why a step that dropped spans dropped them (`DROPPED_TRUNCATED` or
+    `DROPPED_NO_OBSERVATION`)."""
+    return DROPPED_NO_OBSERVATION if observation is None else DROPPED_TRUNCATED
+
+
+def misconfigured_evidence_tools(tools: Iterable[object]) -> list[str]:
+    """Messages for tools named like an evidence tool whose ``output_model`` is
+    not exactly that tool's output model (empty when all are fine).
+
+    A subclass is refused too: tool outputs forbid extra keys, so a subclass
+    that adds a field produces results the evidence store cannot read.
+    """
+    problems = []
+    for tool in tools:
+        name = getattr(tool, "name", None)
+        if not isinstance(name, str) or name not in EVIDENCE_OUTPUTS:
+            continue
+        expected = EVIDENCE_OUTPUTS[name]
+        actual = getattr(tool, "output_model", None)
+        if actual is not expected:
+            got = actual.__name__ if isinstance(actual, type) else repr(actual)
+            problems.append(
+                f"tool {name!r} must return {expected.__name__} (its results are evidence), "
+                f"got {got}"
+            )
+    return problems
 
 
 def _shown_passages(observation: Observation | None, total: int) -> int:

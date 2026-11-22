@@ -21,7 +21,12 @@ from agentic_research.agent import (
     Task,
     ToolCall,
 )
-from agentic_research.agent.evidence import EvidenceStore
+from agentic_research.agent.evidence import (
+    DROPPED_NO_OBSERVATION,
+    DROPPED_TRUNCATED,
+    EvidenceStore,
+    misconfigured_evidence_tools,
+)
 from agentic_research.agent.loop import EVIDENCE_DROPPED_TRUNCATED, EVIDENCE_UNREADABLE
 from agentic_research.agent.policy import Decision
 from agentic_research.agent.state import RunState
@@ -39,12 +44,19 @@ from agentic_research.citations import (
     feedback,
 )
 from agentic_research.policies.oracle import OraclePolicy
+from agentic_research.probe import probe_registry
 from agentic_research.tools import ToolExecutor, ToolRegistry, ToolResult
-from agentic_research.tools.base import RetryPolicy, ToolArgs, ToolContext, ToolOutput
-from agentic_research.tools.builtin import research_registry
+from agentic_research.tools.base import (
+    ErrorClass,
+    RetryPolicy,
+    ToolArgs,
+    ToolContext,
+    ToolOutput,
+)
+from agentic_research.tools.builtin import default_registry, research_registry
 from agentic_research.tools.read import MAX_READ_CHARS
 from agentic_research.tools.search import SearchCorpusOutput
-from agentic_research.trace.schema import StepSpan, Trace
+from agentic_research.trace.schema import RunSpan, StepSpan, Trace
 from rag_index import FIXTURE_CORPUS, FIXTURE_CORPUS_ID, build_index
 
 VELMORA_DOC_ID = "7610eae52aac886e"
@@ -428,7 +440,12 @@ async def test_omitted_passages_of_a_cut_search_do_not_ground(backend: SearchBac
     assert events == [
         (
             EVIDENCE_DROPPED_TRUNCATED,
-            {"tool": "search_corpus", "shown": shown, "dropped": len(passages) - shown},
+            {
+                "tool": "search_corpus",
+                "shown": shown,
+                "dropped": len(passages) - shown,
+                "reason": DROPPED_TRUNCATED,
+            },
         )
     ]
 
@@ -528,7 +545,10 @@ async def test_a_truncated_read_is_a_dropped_span_in_the_trace() -> None:
     traced = await loop.run_traced(TASK)
     first, second, _ = _spans(traced.trace)
     assert [(e.name, e.attributes) for e in first.events] == [
-        (EVIDENCE_DROPPED_TRUNCATED, {"tool": "read_document", "shown": 0, "dropped": 1})
+        (
+            EVIDENCE_DROPPED_TRUNCATED,
+            {"tool": "read_document", "shown": 0, "dropped": 1, "reason": DROPPED_TRUNCATED},
+        )
     ]
     assert second.events == []  # shown in full: nothing dropped, no event
 
@@ -570,10 +590,16 @@ async def test_a_result_without_an_observation_is_dropped_and_traced() -> None:
     assert n == 2
     step0, step1, step2, _ = _spans(traced.trace)
     assert [(e.name, e.attributes) for e in step0.events] == [
-        (EVIDENCE_DROPPED_TRUNCATED, {"tool": "search_corpus", "shown": 0, "dropped": n})
+        (
+            EVIDENCE_DROPPED_TRUNCATED,
+            {"tool": "search_corpus", "shown": 0, "dropped": n, "reason": DROPPED_NO_OBSERVATION},
+        )
     ]
     assert [(e.name, e.attributes) for e in step1.events] == [
-        (EVIDENCE_DROPPED_TRUNCATED, {"tool": "read_document", "shown": 0, "dropped": 1})
+        (
+            EVIDENCE_DROPPED_TRUNCATED,
+            {"tool": "read_document", "shown": 0, "dropped": 1, "reason": DROPPED_NO_OBSERVATION},
+        )
     ]
     assert EvidenceStore.from_state(state).dropped == {0: n, 1: 1}
     # Nothing was shown, so nothing grounds the answer.
@@ -657,19 +683,83 @@ class _ForeignRead:
         return _NotADocument(value=42)
 
 
-async def test_a_foreign_tool_under_an_evidence_name_does_not_crash_the_loop() -> None:
-    citation = _designer_citation(_fixture())
+class _WiderSearchOutput(SearchCorpusOutput):
+    """A subclass with an extra field: its results do not fit `SearchCorpusOutput`."""
+
+    note: str = "extra"
+
+
+class _ForeignSearch(_ForeignRead):
+    name = "search_corpus"
+    output_model: type[ToolOutput] = _WiderSearchOutput
+
+
+@pytest.mark.parametrize(
+    ("tool", "expected", "got"),
+    [
+        (_ForeignRead(), "ReadDocumentOutput", "_NotADocument"),
+        (_ForeignSearch(), "SearchCorpusOutput", "_WiderSearchOutput"),
+    ],
+)
+def test_the_loop_refuses_a_foreign_tool_under_an_evidence_name(
+    tool: _ForeignRead, expected: str, got: str
+) -> None:
+    # Chad's spot-check of 4444938: refuse the registry up front, so a run whose
+    # evidence cannot be read never ends `abstained` because the policy gave up.
+    with pytest.raises(ValueError, match="AgentLoop refuses the tool registry") as info:
+        AgentLoop(
+            OraclePolicy([GiveUp(reason="nothing_found")]),
+            ToolExecutor(ToolRegistry([tool])),
+            Budgets(max_steps=3),
+            run_id="r-foreign",
+        )
+    assert f"tool {tool.name!r} must return {expected}" in str(info.value)
+    assert f"got {got}" in str(info.value)
+
+
+def test_misconfigured_evidence_tools_lists_only_wrong_evidence_tools() -> None:
+    assert misconfigured_evidence_tools(research_registry(_fixture())) == []
+    assert misconfigured_evidence_tools(default_registry()) == []
+    # The frozen M1 probe registers a schema-only `search_corpus` stub, so its
+    # registry can never drive the agent loop.
+    [problem] = misconfigured_evidence_tools(probe_registry())
+    assert problem.startswith("tool 'search_corpus' must return SearchCorpusOutput")
+
+    class _Nameless:
+        output_model = _NotADocument
+
+    class _NoModel:
+        name = "read_document"
+        output_model = None
+
+    assert misconfigured_evidence_tools([_Nameless()]) == []
+    assert misconfigured_evidence_tools([_NoModel()]) == [
+        "tool 'read_document' must return ReadDocumentOutput (its results are evidence), got None"
+    ]
+
+
+async def test_a_foreign_tool_registered_after_the_loop_fails_the_run() -> None:
+    registry = ToolRegistry()
     loop = AgentLoop(
-        OraclePolicy([ToolCall(tool="read_document"), _answer(citation)]),
-        ToolExecutor(ToolRegistry([_ForeignRead()])),
+        OraclePolicy([ToolCall(tool="read_document"), GiveUp(reason="nothing_found")]),
+        ToolExecutor(registry),
         Budgets(max_steps=3),
         verifier=CitationVerifier(_fixture()),
-        run_id="r-foreign",
+        run_id="r-foreign-late",
     )
+    registry.register(_ForeignRead())  # after the loop checked the registry
     traced = await loop.run_traced(TASK)
+    state = traced.state
     first = _spans(traced.trace)[0]
     assert [(e.name, e.attributes) for e in first.events] == [
         (EVIDENCE_UNREADABLE, {"tool": "read_document"})
     ]
-    # The run's evidence cannot be read, so its answer cannot be verified.
-    assert traced.state.terminal_label == "failed:verifier_error"
+    # Fail closed at once: the policy's GiveUp is never reached, so the run is
+    # not `abstained`.
+    assert len(state.steps) == 1
+    assert state.terminal_label == "failed:evidence_unreadable"
+    run = next(s for s in traced.trace.spans if isinstance(s, RunSpan))
+    assert run.error is not None
+    assert run.error.error_class == ErrorClass.PERMANENT
+    assert run.error.reason == "evidence_unreadable"
+    assert "'read_document'" in run.error.message

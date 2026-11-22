@@ -64,13 +64,20 @@ every provider call the policy reports and every tool attempt; `run` is the
 same loop without returning the trace.
 A tool step whose evidence result returned spans the policy was not shown in
 full (passages dropped from a cut ``search_corpus`` observation, a truncated
-``read_document`` slice; `agentic_research.agent.evidence`) gets an
-``evidence_dropped_truncated`` step event with ``tool``, ``shown`` and
-``dropped`` counts (ADR-0004), so a trace shows when truncation cost
-grounding. A successful result under an evidence tool's name whose output
-does not fit that tool's model (a foreign tool registered as
-``search_corpus``) gets an ``evidence_unreadable`` event instead of crashing
-the loop.
+``read_document`` slice, a result with no observation;
+`agentic_research.agent.evidence`) gets an ``evidence_dropped_truncated``
+step event with ``tool``, ``shown`` and ``dropped`` counts and a ``reason``
+(``truncated`` or ``no_observation``; ADR-0004), so a trace shows when and
+why truncation cost grounding.
+
+Evidence tools: the loop refuses to start (``ValueError``) if the executor's
+registry has a tool named ``search_corpus`` or ``read_document`` whose
+``output_model`` is not that tool's output model, since the evidence store
+reads results by tool name. A run must not end ``abstained`` (the policy
+gave up) or ``succeeded`` when its evidence could not be read. If such a
+tool is registered after the loop was built, its first successful result
+gets an ``evidence_unreadable`` step event and ends the run as
+``failed:evidence_unreadable`` at once.
 """
 
 from __future__ import annotations
@@ -82,7 +89,11 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 
 from agentic_research.agent.actions import FinalAnswer, GiveUp, ToolCall
-from agentic_research.agent.evidence import step_evidence
+from agentic_research.agent.evidence import (
+    drop_reason,
+    misconfigured_evidence_tools,
+    step_evidence,
+)
 from agentic_research.agent.guards import LOOP, LOOP_DETECTED, LoopCheck, LoopGuard
 from agentic_research.agent.observations import ObservationShaper
 from agentic_research.agent.policy import Decision, Policy, PolicyFailure, ProviderCallInfo
@@ -112,7 +123,8 @@ ANSWER_AFTER_DEADLINE = "answer_after_deadline"
 LATE_RESULT_IGNORED = "late_result_ignored"
 #: Step event: an evidence tool returned spans the policy was not shown in full.
 EVIDENCE_DROPPED_TRUNCATED = "evidence_dropped_truncated"
-#: Step event: a result under an evidence tool's name does not fit that tool's output.
+#: Step event and failure reason: a result under an evidence tool's name does not
+#: fit that tool's output model.
 EVIDENCE_UNREADABLE = "evidence_unreadable"
 DEFAULT_LOOP_GUARD = LoopGuard()
 _RUN_ID_RE = re.compile(r"[A-Za-z0-9_.:-]{1,64}")
@@ -164,6 +176,9 @@ class AgentLoop:
             raise ValueError("step_timeout_s must be a finite number > 0")
         if not _RUN_ID_RE.fullmatch(run_id):
             raise ValueError("run_id must be 1-64 characters from [A-Za-z0-9_.:-] (a trace id)")
+        problems = misconfigured_evidence_tools(executor.registry)
+        if problems:
+            raise ValueError("AgentLoop refuses the tool registry: " + "; ".join(problems))
         self._policy = policy
         self._executor = executor
         self._budgets = budgets
@@ -392,9 +407,14 @@ class AgentLoop:
             spans, dropped = step_evidence(record, observation)
         except ValueError:  # pydantic's ValidationError included
             # A tool registered under an evidence tool's name with another output
-            # model: not evidence. The loop does not crash; the citation
-            # verifier will refuse to verify this run (failed:verifier_error).
+            # model after __init__ checked the registry. Fail closed: the run's
+            # evidence is unknown, so it must not end abstained or succeeded.
             rec.step_event(EVIDENCE_UNREADABLE, at=None, tool=action.tool)
+            rec.fail(
+                ErrorClass.PERMANENT,
+                f"result of {action.tool!r} does not fit its evidence output model",
+            )
+            state.finish(RunStatus.FAILED, detail=EVIDENCE_UNREADABLE)
             return
         if dropped:
             rec.step_event(
@@ -403,6 +423,7 @@ class AgentLoop:
                 tool=action.tool,
                 shown=len(spans),
                 dropped=dropped,
+                reason=drop_reason(observation),
             )
 
     def _record(

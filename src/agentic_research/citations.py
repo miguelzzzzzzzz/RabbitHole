@@ -30,8 +30,9 @@ order) and its ``message`` lists the issues by position
 feedback the policy sees is not itself evidence. The loop charges one repair
 per rejection; past ``max_repairs`` the run ends ``budget_exhausted:repairs``
 (graded as not abstaining, ADR-0004). Whether the answer is *correct* is the
-graders' job (M4), not the verifier's: a valid, grounded citation of an
-irrelevant passage passes.
+graders' job (M4), not the verifier's: there is no entailment check, so a
+valid, grounded citation of an irrelevant passage passes, and "verified" does
+not mean "correct" (ADR-0004 amendment, 2026-11-22).
 
 Document lookups run in a worker thread so the loop's step timeout and run
 deadline still bound a slow backend. A backend failure other than an unknown
