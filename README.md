@@ -52,7 +52,7 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | Agent loop, run state, budgets, timeouts/retries | `run(task, budgets)`; failures become observations or a terminal status, never exceptions | built (M2) |
 | Run tracing, `arp run`, `arp trace show` | every run writes a trace v1 file; scripted provider only (no model) | built (M2) |
 | Search backends | `SearchBackend` contract; `RagEngineBackend` over a [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0` index (format 2, explicit `corpus_id`, BM25 default, hybrid option, `search --json` `schema_version` gate); `FixtureSearchBackend` for tests | built (M3, in progress) |
-| Research tools | `search_corpus` (top-k passages with citation fields) and `read_document` (bounded slice of the normalized stored text) over any `SearchBackend`, run in a worker thread; `EvidenceStore` of the spans a run's policy was shown in full, built from its recorded steps and observations (search observations cut at passage boundaries) | built (M3, in progress) |
+| Research tools | `search_corpus` (top-k passages with citation fields) and `read_document` (bounded slice of the normalized stored text) over any `SearchBackend`, run in a worker thread; `EvidenceStore` of the spans a run's policy was shown in full, built from its recorded steps and observations (search observations cut at passage boundaries); `arp run --index DIR --corpus-id ID` runs them over a CitationNeeded index, with `--provider oracle --trajectory FILE` for a fixed action list | built (M3, in progress) |
 | Citations | `FinalAnswer.claims` with `Citation`s (`doc_id`, `start`, `end`, `quote`, optional `content_hash`); `CitationVerifier` rejects `no_citation`, `invalid_citation` (unknown doc, offsets, quote), `stale_source` and `ungrounded_citation` with repair feedback (no entailment check: "verified" is not "correct"; correctness is graded in M4); `evidence_dropped_truncated` trace events with a `reason` | built (M3, in progress) |
 | `fetch_url`, guardrails | fixture-backed `fetch_url`; allowlists and injection flags | M3 |
 | Task suites, graders, eval runner | programmatic trajectory graders; oracle and heuristic baselines | M4 |
@@ -72,6 +72,14 @@ arp probe tool-calls              # frozen native vs json probe (local model)
 # One agent run on canned replies (no model), then read its trace
 arp run --provider scripted --script tests/fixtures/scripts/two_step.json --run-id demo
 arp trace show traces/demo.jsonl
+
+# A run over a CitationNeeded format-2 index: search_corpus + read_document,
+# final answers checked by the citation verifier (offline hashing embedder)
+rag-engine index tests/fixtures/corpus/rabbithole-tasks-v1 --out /tmp/rh-index \
+  --corpus-id rabbithole-tasks-v1 --embedder hashing
+arp run --provider oracle --trajectory tests/fixtures/trajectories/velmora_designer.json \
+  --question "Who designed the Velmora Bridge?" \
+  --index /tmp/rh-index --corpus-id rabbithole-tasks-v1 --run-id velmora
 ```
 
 `arp run` writes `traces/<run-id>.jsonl` unless `--trace-out` is given (it
@@ -79,7 +87,16 @@ refuses to start if that file already exists; a file created there while the
 run is going is replaced, see M2 MINOR-1 in TODO.md) and exits 0 when the run answered, 1
 for any other end (the trace is still written), 2 for bad input. Budgets:
 `--max-steps` (default 8), `--max-tool-calls`, `--max-tokens`, `--deadline-s`.
-Only `--provider scripted` exists; local and hosted providers arrive in M5.
+`--provider scripted` replays a script through the LLM policy and
+`--provider oracle` follows a JSON list of actions (`--trajectory FILE`,
+with `--question`); neither calls a model, and local and hosted providers
+arrive in M5. With `--index DIR --corpus-id ID` (`--retrieval lexical`, the
+default, or `hybrid`) the run gets `search_corpus` and `read_document` over
+that index, and the verifier defaults to `citations` (`--verifier
+accept-all` turns it off). The LLM policy's answers carry no claims until
+M5, so a scripted run's answer over a corpus is rejected as `no_citation`;
+the oracle trajectory above is accepted. The corpus, mode and verifier are
+printed but not yet recorded in the trace (M2 MINOR-5).
 
 Local model server (dev box only; CI never runs it), see
 [docs/local-models.md](docs/local-models.md):

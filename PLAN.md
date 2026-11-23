@@ -590,6 +590,25 @@ Acceptance criteria
   runs cannot finish, this is recorded as a blocker in `state.json`. The
   affected results stay "not run", and every other M5 deliverable still
   ships.
+- **No gold leaks into the policy's context** (Bogart, 2026-11-22). Every
+  message the LLM policy sends (system prompt, task message, tool schemas
+  and the replayed history) is built only from the task question, the tool
+  registry, the policy's own earlier replies and the shaped observations. No
+  task field other than the question (`gold.answer`, `gold.evidence`,
+  `gold.min_calls`, `category`, `faults`, task id) may reach it. Test: for
+  every task in both suites, render the full request for the first step and
+  for a scripted multi-step run, and assert that no gold answer string and no
+  gold evidence text appears in it unless it arrived inside an observation of
+  a tool result for that run.
+- **Frozen prompt template** (Bogart, 2026-11-22). The system prompt and
+  reply-format template are committed and hash-locked before the first `dev`
+  baseline run, the same way `probes/tool_calls.v1.yaml` was frozen for M1.
+  Each report records the hash; changing the template means a new version,
+  not an edit.
+- The frozen M1 probe keeps its schema-only `search_corpus` stub, which the
+  loop refuses (`misconfigured_evidence_tools`). If the probe ever runs
+  through `AgentLoop`, its stub is swapped for the real `search_corpus`
+  schema; the check is never loosened (Chad, 2026-11-22).
 
 Tests
 - Cassette key stability: reordering dict keys gives the same hash. A

@@ -11,7 +11,7 @@ import pytest
 from agentic_research import __version__
 from agentic_research.cli import main
 from agentic_research.tools import ToolError
-from agentic_research.tools.builtin import default_registry
+from agentic_research.tools.builtin import catalog_registry, default_registry
 from agentic_research.tools.registry import TOOL_NAME_PATTERN
 
 
@@ -45,10 +45,14 @@ def _schema_output(capsys: pytest.CaptureFixture[str], *extra: str) -> list[dict
     return out
 
 
-def test_tools_schema_prints_the_default_registry(capsys: pytest.CaptureFixture[str]) -> None:
+def test_tools_schema_prints_every_built_in_tool(capsys: pytest.CaptureFixture[str]) -> None:
     schemas = _schema_output(capsys)
-    assert schemas == default_registry().openai_schemas()
-    assert [s["function"]["name"] for s in schemas] == ["calculator"]
+    assert schemas == catalog_registry().openai_schemas()
+    assert [s["function"]["name"] for s in schemas] == [
+        "calculator",
+        "search_corpus",
+        "read_document",
+    ]
 
 
 def test_tools_schema_is_valid_openai_format(capsys: pytest.CaptureFixture[str]) -> None:
@@ -88,7 +92,7 @@ def test_tools_schema_unknown_tool(capsys: pytest.CaptureFixture[str]) -> None:
     assert main(["tools", "schema", "--tool", "nope"]) == 2
     captured = capsys.readouterr()
     assert captured.out == ""
-    assert "unknown tool 'nope' (known: calculator)" in captured.err
+    assert "unknown tool 'nope' (known: calculator, search_corpus, read_document)" in captured.err
 
 
 def test_tools_without_subcommand_prints_tools_help(capsys: pytest.CaptureFixture[str]) -> None:
@@ -107,4 +111,4 @@ def test_arp_module_entry_point_runs() -> None:
         timeout=60,
     )
     assert proc.returncode == 0, proc.stderr
-    assert json.loads(proc.stdout) == default_registry().openai_schemas()
+    assert json.loads(proc.stdout) == catalog_registry().openai_schemas()

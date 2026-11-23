@@ -1,0 +1,22 @@
+[
+  {"kind": "tool_call", "tool": "search_corpus", "args": {"query": "Velmora Bridge designed", "k": 3}},
+  {"kind": "tool_call", "tool": "read_document", "args": {"doc_id": "7610eae52aac886e", "start": 156, "end": 312}},
+  {
+    "kind": "final_answer",
+    "answer": "Ilse Tarkand",
+    "claims": [
+      {
+        "text": "The Velmora Bridge was designed by Ilse Tarkand.",
+        "citations": [
+          {
+            "doc_id": "7610eae52aac886e",
+            "start": 167,
+            "end": 220,
+            "quote": "The bridge was designed by the engineer Ilse Tarkand.",
+            "content_hash": "c35794fe14d1ea8b355b290c9c7b7f67232dbd2bfd7171674dff3fa4724f7698"
+          }
+        ]
+      }
+    ]
+  }
+]

@@ -1,8 +1,9 @@
 """Command-line entry point (`arp`).
 
 Implemented: ``arp tools schema``, ``arp doctor``, ``arp probe tool-calls``,
-``arp run --provider scripted --script FILE`` and ``arp trace show FILE``.
-Later milestones add ``eval`` and model-backed ``run`` providers.
+``arp run --provider scripted|oracle`` (optionally over a corpus with
+``--index DIR --corpus-id ID``) and ``arp trace show FILE``. Later milestones
+add ``eval`` and model-backed ``run`` providers.
 """
 
 from __future__ import annotations
@@ -12,6 +13,7 @@ import asyncio
 import json
 import sys
 from collections.abc import Sequence
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -19,22 +21,39 @@ from pydantic import ValidationError
 
 from agentic_research import __version__
 from agentic_research.agent import AgentLoop, Budgets, Task
+from agentic_research.agent.policy import Policy
 from agentic_research.agent.state import RunStatus
+from agentic_research.agent.verifier import AcceptAll, Verifier
+from agentic_research.backends.base import BackendError, SearchBackend
+from agentic_research.backends.rag_engine import RagEngineBackend
+from agentic_research.citations import CitationVerifier
 from agentic_research.policies import LLMPolicy
+from agentic_research.policies.oracle import OraclePolicy
 from agentic_research.preflight import run_doctor
 from agentic_research.probe import run_probe_cli
 from agentic_research.providers.scripted import SCRIPTED_MODEL, ScriptedProvider, load_script
-from agentic_research.tools.builtin import default_registry
+from agentic_research.tools.builtin import catalog_registry, default_registry, research_registry
 from agentic_research.tools.executor import ToolExecutor
+from agentic_research.tools.registry import ToolRegistry
 from agentic_research.trace import TraceError, read_trace, write_trace
+from agentic_research.trace.schema import ToolFormat
 from agentic_research.trace.show import format_trace
 
 #: Where ``arp run`` writes traces when ``--trace-out`` is not given.
 DEFAULT_TRACE_DIR = Path("traces")
 
 
+@dataclass(frozen=True)
+class _PolicySetup:
+    policy: Policy
+    question: str
+    provider: str
+    model: str | None
+    tool_format: ToolFormat | None
+
+
 def _tools_schema(args: argparse.Namespace) -> int:
-    registry = default_registry()
+    registry = catalog_registry()
     schemas = registry.openai_schemas()
     if args.tool is not None:
         if args.tool not in registry:
@@ -65,24 +84,85 @@ def _default_run_id() -> str:
     return datetime.now(UTC).strftime("run-%Y%m%dT%H%M%SZ")
 
 
-def _run(args: argparse.Namespace) -> int:
-    """``arp run``: one agent run; exit 0 if it answered, 1 if not, 2 on bad input."""
+def _load_policy(args: argparse.Namespace, registry: ToolRegistry) -> _PolicySetup | str:
+    """The run's policy from ``--provider`` and its file, or an error message."""
+    if args.provider == "oracle":
+        if args.script is not None:
+            return "--script is for --provider scripted; the oracle takes --trajectory FILE"
+        if args.trajectory is None:
+            return "--provider oracle needs --trajectory FILE"
+        if not args.question:
+            return "--provider oracle needs --question (a trajectory has none)"
+        try:
+            oracle = OraclePolicy.load(args.trajectory)
+        except OSError as exc:
+            return f"cannot read trajectory {args.trajectory}: {exc.strerror or exc}"
+        except ValidationError as exc:
+            first = exc.errors(include_url=False, include_input=False)[0]
+            where = ".".join(str(part) for part in first["loc"]) or "trajectory"
+            return f"invalid trajectory {args.trajectory}: {where}: {first['msg']}"
+        except ValueError as exc:
+            return f"invalid trajectory {args.trajectory}: {exc}"
+        return _PolicySetup(oracle, args.question, provider="none", model=None, tool_format=None)
+    if args.trajectory is not None:
+        return "--trajectory is for --provider oracle; the scripted provider takes --script FILE"
+    if args.script is None:
+        return "--provider scripted needs --script FILE"
     try:
         script = load_script(args.script)
     except OSError as exc:
-        return _fail(f"cannot read script {args.script}: {exc.strerror or exc}")
+        return f"cannot read script {args.script}: {exc.strerror or exc}"
     except ValidationError as exc:
         first = exc.errors(include_url=False, include_input=False)[0]
         where = ".".join(str(part) for part in first["loc"]) or "script"
-        return _fail(f"invalid script {args.script}: {where}: {first['msg']}")
+        return f"invalid script {args.script}: {where}: {first['msg']}"
     question = args.question if args.question is not None else script.question
     if not question:
-        return _fail("no question: the script has none, so pass --question")
-
-    run_id = args.run_id if args.run_id is not None else _default_run_id()
-    registry = default_registry()
+        return "no question: the script has none, so pass --question"
     provider = ScriptedProvider.from_script(script)
     policy = LLMPolicy(provider, registry, tool_format=args.tool_format, model=SCRIPTED_MODEL)
+    return _PolicySetup(
+        policy, question, provider=provider.name, model=SCRIPTED_MODEL, tool_format=args.tool_format
+    )
+
+
+def _load_corpus(args: argparse.Namespace) -> SearchBackend | str | None:
+    """The ``--index`` backend (None without one), or an error message."""
+    if args.index is None:
+        if args.corpus_id is not None:
+            return "--corpus-id needs --index DIR"
+        if args.retrieval is not None:
+            return "--retrieval needs --index DIR"
+        return None
+    if args.corpus_id is None:
+        return "--index needs --corpus-id ID (the corpus id is never guessed from the folder)"
+    try:
+        return RagEngineBackend(
+            args.index, corpus_id=args.corpus_id, mode=args.retrieval or "lexical"
+        )
+    except BackendError as exc:
+        return f"cannot use index {args.index}: {exc}"
+
+
+def _run(args: argparse.Namespace) -> int:
+    """``arp run``: one agent run; exit 0 if it answered, 1 if not, 2 on bad input."""
+    backend = _load_corpus(args)
+    if isinstance(backend, str):
+        return _fail(backend)
+    verifier_name = args.verifier or ("citations" if backend is not None else "accept-all")
+    verifier: Verifier
+    if verifier_name == "citations":
+        if backend is None:
+            return _fail("--verifier citations needs a corpus: pass --index DIR --corpus-id ID")
+        verifier = CitationVerifier(backend)
+    else:
+        verifier = AcceptAll()
+    registry = default_registry() if backend is None else research_registry(backend)
+    setup = _load_policy(args, registry)
+    if isinstance(setup, str):
+        return _fail(setup)
+
+    run_id = args.run_id if args.run_id is not None else _default_run_id()
     budgets = Budgets(
         max_steps=args.max_steps,
         max_tool_calls=args.max_tool_calls,
@@ -90,7 +170,13 @@ def _run(args: argparse.Namespace) -> int:
         deadline_s=args.deadline_s,
     )
     try:
-        loop = AgentLoop(policy, ToolExecutor(registry, seed=args.seed), budgets, run_id=run_id)
+        loop = AgentLoop(
+            setup.policy,
+            ToolExecutor(registry, seed=args.seed),
+            budgets,
+            verifier=verifier,
+            run_id=run_id,
+        )
     except ValueError as exc:
         return _fail(str(exc))
     trace_out: Path = args.trace_out or DEFAULT_TRACE_DIR / f"{run_id}.jsonl"
@@ -99,15 +185,18 @@ def _run(args: argparse.Namespace) -> int:
 
     traced = asyncio.run(
         loop.run_traced(
-            Task(question=question),
-            provider=provider.name,
-            model=SCRIPTED_MODEL,
-            tool_format=args.tool_format,
+            Task(question=setup.question),
+            provider=setup.provider,
+            model=setup.model,
+            tool_format=setup.tool_format,
         )
     )
     trace_out.parent.mkdir(parents=True, exist_ok=True)
     write_trace(traced.trace, trace_out)
     state = traced.state
+    if backend is not None:
+        mode = args.retrieval or "lexical"
+        print(f"corpus: {backend.corpus_id} ({mode}), verifier: {verifier_name}")
     print(f"run {run_id}: {state.terminal_label}")
     if state.answer is not None:
         print(f"answer: {state.answer}")
@@ -175,15 +264,42 @@ def build_parser() -> argparse.ArgumentParser:
         "run",
         help="run the agent on one question and write its trace",
         description=(
-            "Run the agent loop once and write a JSONL trace. Only the scripted "
-            "provider exists so far: it replays a script file's canned replies "
-            "(no model). Exit status: 0 answered, 1 any other end, 2 bad input."
+            "Run the agent loop once and write a JSONL trace. No provider calls a "
+            "model yet: 'scripted' replays a script file's canned replies through the "
+            "LLM policy, 'oracle' follows a JSON list of actions. With --index DIR "
+            "--corpus-id ID the run gets search_corpus and read_document over that "
+            "CitationNeeded format-2 index, and final answers go through the citation "
+            "verifier (--verifier citations, the default with a corpus). "
+            "Exit status: 0 answered, 1 any other end, 2 bad input."
         ),
     )
-    run.add_argument("--provider", required=True, choices=["scripted"])
-    run.add_argument("--script", required=True, type=Path, metavar="FILE")
+    run.add_argument("--provider", required=True, choices=["scripted", "oracle"])
+    run.add_argument("--script", type=Path, metavar="FILE", help="script (--provider scripted)")
+    run.add_argument(
+        "--trajectory",
+        type=Path,
+        metavar="FILE",
+        help="JSON list of actions, each tagged with kind (--provider oracle)",
+    )
+    run.add_argument("--index", type=Path, metavar="DIR", help="CitationNeeded format-2 index")
+    run.add_argument("--corpus-id", metavar="ID", help="the index's corpus id (needs --index)")
+    run.add_argument(
+        "--retrieval",
+        choices=["lexical", "hybrid"],
+        help="search_corpus retrieval mode (default lexical; needs --index)",
+    )
+    run.add_argument(
+        "--verifier",
+        choices=["accept-all", "citations"],
+        help="final-answer verifier (default: citations with --index, else accept-all)",
+    )
     run.add_argument("--question", help="the task (default: the script's question)")
-    run.add_argument("--tool-format", choices=["native", "json"], default="native")
+    run.add_argument(
+        "--tool-format",
+        choices=["native", "json"],
+        default="native",
+        help="tool-call format of the scripted replies (default native; scripted only)",
+    )
     run.add_argument("--max-steps", type=_positive_int, default=8, metavar="N")
     run.add_argument("--max-tool-calls", type=_positive_int, metavar="N")
     run.add_argument("--max-tokens", type=_positive_int, metavar="N")
