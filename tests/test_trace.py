@@ -16,11 +16,13 @@ from pydantic import ValidationError
 from agentic_research.tools import ErrorClass, ToolContext, ToolError, ToolRegistry
 from agentic_research.tools.calculator import CalculatorTool
 from agentic_research.trace import (
+    RUN_CONFIG_EVENT,
     SCHEMA_VERSION,
     BudgetLimits,
     BudgetUsage,
     ParseFailure,
     ProviderCallSpan,
+    RunConfig,
     RunSpan,
     RunStatus,
     Span,
@@ -418,7 +420,77 @@ def _invalid_trees() -> list[tuple[str, list[Span], str]]:
         ("index repeat", _replaced(spans, "s2", index=1), r"got \[0, 1, 1\]"),
         ("parse count low", _replaced(spans, "r", parse_failures=0), "parse_failures is 0 but 1"),
         ("parse count high", _replaced(spans, "r", parse_failures=2), "parse_failures is 2 but 1"),
+        (
+            "two run configs",
+            _replaced(spans, "r", events=[_config_event(), _config_event()]),
+            "the run span has 2 run_config events",
+        ),
+        (
+            "config without verifier",
+            _replaced(spans, "r", events=[_config_event(verifier=None)]),
+            "invalid run_config event: verifier: Field required",
+        ),
+        (
+            "config extra key",
+            _replaced(spans, "r", events=[_config_event(verified=True)]),
+            "invalid run_config event: verified: Extra inputs are not permitted",
+        ),
+        (
+            "config bad retrieval",
+            _replaced(
+                spans, "r", events=[_config_event(corpus={"corpus_id": "c", "retrieval": "dense"})]
+            ),
+            "invalid run_config event: corpus.retrieval",
+        ),
+        (
+            "config bad timeout",
+            _replaced(spans, "r", events=[_config_event(step_timeout_s=0)]),
+            "invalid run_config event: step_timeout_s",
+        ),
+        (
+            "config bad budget",
+            _replaced(spans, "r", events=[_config_event(budgets={"max_repairs": -1})]),
+            "invalid run_config event: budgets.max_repairs",
+        ),
     ]
+
+
+def _config_event(**changes: Any) -> SpanEvent:
+    """A ``run_config`` event; a change to ``None`` drops that key."""
+    attributes: dict[str, Any] = {
+        "verifier": "citations",
+        "corpus": {"corpus_id": "rabbithole-tasks-v1", "retrieval": "lexical"},
+        "seed": 0,
+        "step_timeout_s": None,
+        "budgets": {"max_steps": 8},
+    }
+    attributes |= changes
+    attributes = {k: v for k, v in attributes.items() if v is not None or k not in changes}
+    return SpanEvent(name=RUN_CONFIG_EVENT, at_s=0.0, attributes=attributes)
+
+
+def test_a_trace_without_run_config_still_reads(trace: Trace) -> None:
+    # Traces written before 2026-11-24 have no run_config; a grader must treat
+    # them as unverified, never assume the citation verifier ran.
+    assert trace.run_config is None
+
+
+def test_run_config_round_trips(trace: Trace, tmp_path: Path) -> None:
+    spans = _replaced(trace.spans, "r", events=[_config_event()])
+    configured = Trace(header=HEADER, spans=spans)
+    path = tmp_path / "t.jsonl"
+    write_trace(configured, path)
+    config = read_trace(path).run_config
+    assert isinstance(config, RunConfig) and config.citations_verified
+    assert config.corpus is not None and config.corpus.corpus_id == "rabbithole-tasks-v1"
+    assert config.budgets.max_steps == 8 and config.budgets.max_repairs is None
+
+
+def test_an_invalid_run_config_in_a_file_is_reported(trace: Trace) -> None:
+    spans = _replaced(trace.spans, "r", events=[_config_event(seed="zero")])
+    text = dumps_trace(Trace.model_construct(header=HEADER, spans=spans))
+    with pytest.raises(TraceError, match=r"inconsistent trace: .*invalid run_config event: seed"):
+        loads_trace(text, source="x")
 
 
 @pytest.mark.parametrize(

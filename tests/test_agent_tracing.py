@@ -14,6 +14,7 @@ from typing import Any
 import pytest
 
 from agentic_research.agent import (
+    AcceptAll,
     AgentLoop,
     Budgets,
     Decision,
@@ -29,6 +30,9 @@ from agentic_research.agent import (
 from agentic_research.agent.policy import ProviderCallInfo
 from agentic_research.agent.state import RunStatus as LoopStatus
 from agentic_research.agent.tracing import UNREPRESENTABLE, TraceRecorder, json_object
+from agentic_research.agent.verifier import MAX_LABEL_CHARS, verifier_label
+from agentic_research.backends.fixture import FixtureSearchBackend
+from agentic_research.citations import CitationVerifier
 from agentic_research.policies import LLMPolicy
 from agentic_research.policies.llm import provider_error_class
 from agentic_research.providers import (
@@ -55,10 +59,16 @@ from agentic_research.tools import (
 )
 from agentic_research.tools.builtin import default_registry
 from agentic_research.trace import (
+    CITATION_VERIFIER,
+    RUN_CONFIG_EVENT,
+    ConfiguredBudgets,
+    CorpusConfig,
     ParseFailure,
     ProviderCallSpan,
+    RunConfig,
     RunStatus,
     SpanError,
+    SpanEvent,
     StepSpan,
     ToolCallSpan,
     Trace,
@@ -71,6 +81,13 @@ NO_JITTER = RetryPolicy(
     max_attempts=4, initial_backoff_s=0.5, multiplier=2.0, max_backoff_s=8.0, jitter=0.0
 )
 STARTED = datetime(2026, 11, 14, 1, 0, tzinfo=UTC)
+CONFIG = RunConfig(
+    verifier="accept-all",
+    corpus=None,
+    seed=0,
+    step_timeout_s=None,
+    budgets=ConfiguredBudgets(max_steps=1),
+)
 
 
 class FakeTime:
@@ -166,6 +183,13 @@ def run(
     # Every trace must survive the JSONL round trip unchanged.
     assert loads_trace(dumps_trace(traced.trace)) == traced.trace
     return traced.state, traced.trace
+
+
+def outcome_events(trace: Trace) -> list[SpanEvent]:
+    """The run span's events after its leading ``run_config`` event."""
+    first, *rest = trace.run.events
+    assert first.name == RUN_CONFIG_EVENT and first.at_s == 0.0
+    return rest
 
 
 def spans(trace: Trace, kind: type) -> list:  # type: ignore[type-arg]
@@ -361,7 +385,7 @@ def test_a_call_rejected_before_running_is_a_zero_length_attempt() -> None:
     assert tool.error is not None and tool.error.error_class is ErrorClass.INVALID_ARGS
     assert tool.arguments == {"nope": 1}
     assert trace.run.status is RunStatus.ABSTAINED
-    assert [(e.name, e.attributes) for e in trace.run.events] == [
+    assert [(e.name, e.attributes) for e in outcome_events(trace)] == [
         ("abstained", {"reason": "stuck"})
     ]
 
@@ -400,7 +424,7 @@ def test_a_retry_the_deadline_cut_off_is_a_step_event() -> None:
     assert [(e.name, e.attributes) for e in step.events] == [
         ("tool_not_retried", {"reason": "deadline_exceeded", "tool": "flaky"})
     ]
-    assert [(e.name, e.attributes) for e in trace.run.events] == [
+    assert [(e.name, e.attributes) for e in outcome_events(trace)] == [
         ("budget_exhausted", {"kind": "deadline"})
     ]
 
@@ -415,8 +439,9 @@ def test_budget_stop_before_the_policy_has_no_step_span() -> None:
     state, trace = run(policy, budgets=Budgets(max_steps=2), tools=[a], time_=time_)
     assert state.terminal_label == "budget_exhausted:steps"
     assert [s.index for s in spans(trace, StepSpan)] == [0, 1]
-    assert trace.run.events[0].attributes == {"kind": "steps"}
-    assert trace.run.events[0].at_s == trace.run.end_s
+    (event,) = outcome_events(trace)
+    assert (event.name, event.attributes) == ("budget_exhausted", {"kind": "steps"})
+    assert event.at_s == trace.run.end_s
 
 
 def test_deadline_used_up_by_a_tool_stops_before_another_step_span() -> None:
@@ -588,6 +613,7 @@ def test_recorder_refuses_misuse() -> None:
             provider="none",
             model=None,
             tool_format=None,
+            config=CONFIG,
         )
 
 
@@ -608,9 +634,103 @@ def test_recorder_clamps_backwards_time_and_early_events() -> None:
         provider="none",
         model=None,
         tool_format=None,
+        config=CONFIG,
     )
     step = spans(trace, StepSpan)[0]
     call = spans(trace, ProviderCallSpan)[0]
     assert (step.start_s, step.end_s, step.events[0].at_s) == (5.0, 5.0, 5.0)
     assert (call.start_s, call.end_s) == (5.0, 5.0)
     assert trace.run.end_s == 5.0  # the run covers its children
+
+
+# --- run_config ---------------------------------------------------------------------
+
+
+class _Unlabelled:
+    async def verify(self, answer: FinalAnswer, state: RunState) -> Verdict:
+        return Verdict.accept()
+
+
+class _Labelled(_Unlabelled):
+    label = "strict-v2"
+
+
+class _BadLabel(_Unlabelled):
+    label = 3
+
+
+class _EmptyLabel(_Unlabelled):
+    label = ""
+
+
+def test_run_config_records_the_loop_setup() -> None:
+    time_ = FakeTime()
+    budgets = Budgets(
+        max_steps=3,
+        max_tool_calls=4,
+        max_tool_calls_per_tool=2,
+        deadline_s=9.5,
+        max_tokens=70,
+        max_repairs=1,
+    )
+    loop = AgentLoop(
+        Scripted([FinalAnswer(answer="42")], time_),
+        ToolExecutor(ToolRegistry(), seed=11, clock=time_.clock),
+        budgets,
+        verifier=_Labelled(),
+        step_timeout_s=1.5,
+    )
+    corpus = CorpusConfig(corpus_id="c-1", retrieval="hybrid")
+    trace = asyncio.run(loop.run_traced(TASK, corpus=corpus, started_at=STARTED)).trace
+    assert outcome_events(trace) == []  # answered: no other run event
+    assert trace.run_config == RunConfig(
+        verifier="strict-v2",
+        corpus=corpus,
+        seed=11,
+        step_timeout_s=1.5,
+        budgets=ConfiguredBudgets(**budgets.model_dump()),
+    )
+    assert loads_trace(dumps_trace(trace)).run_config == trace.run_config
+
+
+def test_configured_budgets_mirror_every_budget() -> None:
+    # A new Budgets limit must reach the trace too.
+    assert set(ConfiguredBudgets.model_fields) == set(Budgets.model_fields)
+
+
+def test_the_default_verifier_is_recorded_as_accept_all() -> None:
+    time_ = FakeTime()
+    _, trace = run(Scripted([FinalAnswer(answer="42")], time_), time_=time_)
+    config = trace.run_config
+    assert config is not None
+    assert (config.verifier, config.corpus, config.seed, config.step_timeout_s) == (
+        "accept-all",
+        None,
+        0,
+        None,
+    )
+    assert not config.citations_verified
+
+
+def test_verifier_labels() -> None:
+    backend = FixtureSearchBackend("c", {"a.md": "Text."})
+    assert verifier_label(AcceptAll()) == "accept-all"
+    assert verifier_label(CitationVerifier(backend)) == CITATION_VERIFIER == "citations"
+    assert verifier_label(_Labelled()) == "strict-v2"
+    for unlabelled in (_Unlabelled(), _BadLabel(), _EmptyLabel()):
+        name = type(unlabelled).__qualname__
+        assert verifier_label(unlabelled) == f"custom:{name}"
+    # Read from the class: an instance cannot relabel itself as the citation verifier.
+    sneaky = _Unlabelled()
+    sneaky.label = CITATION_VERIFIER  # type: ignore[attr-defined]
+    assert verifier_label(sneaky) == "custom:_Unlabelled"
+    long_name = type("V" * 300, (_Unlabelled,), {})()
+    assert len(verifier_label(long_name)) == MAX_LABEL_CHARS
+
+
+def test_a_custom_verifier_is_never_recorded_as_citations() -> None:
+    time_ = FakeTime()
+    _, trace = run(Scripted([FinalAnswer(answer="42")], time_), time_=time_, verifier=_Unlabelled())
+    config = trace.run_config
+    assert config is not None and config.verifier == "custom:_Unlabelled"
+    assert not config.citations_verified

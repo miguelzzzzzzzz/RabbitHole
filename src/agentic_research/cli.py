@@ -24,7 +24,7 @@ from agentic_research.agent import AgentLoop, Budgets, Task
 from agentic_research.agent.policy import Policy
 from agentic_research.agent.state import RunStatus
 from agentic_research.agent.verifier import AcceptAll, Verifier
-from agentic_research.backends.base import BackendError, SearchBackend
+from agentic_research.backends.base import BackendError
 from agentic_research.backends.rag_engine import RagEngineBackend
 from agentic_research.citations import CitationVerifier
 from agentic_research.policies import LLMPolicy
@@ -36,7 +36,7 @@ from agentic_research.tools.builtin import catalog_registry, default_registry, r
 from agentic_research.tools.executor import ToolExecutor
 from agentic_research.tools.registry import ToolRegistry
 from agentic_research.trace import TraceError, read_trace, write_trace
-from agentic_research.trace.schema import ToolFormat
+from agentic_research.trace.schema import CorpusConfig, ToolFormat
 from agentic_research.trace.show import format_trace
 
 #: Where ``arp run`` writes traces when ``--trace-out`` is not given.
@@ -126,7 +126,7 @@ def _load_policy(args: argparse.Namespace, registry: ToolRegistry) -> _PolicySet
     )
 
 
-def _load_corpus(args: argparse.Namespace) -> SearchBackend | str | None:
+def _load_corpus(args: argparse.Namespace) -> RagEngineBackend | str | None:
     """The ``--index`` backend (None without one), or an error message."""
     if args.index is None:
         if args.corpus_id is not None:
@@ -183,20 +183,23 @@ def _run(args: argparse.Namespace) -> int:
     if trace_out.exists():
         return _fail(f"{trace_out} already exists; pick another --trace-out or --run-id")
 
+    corpus = None
+    if backend is not None:
+        corpus = CorpusConfig(corpus_id=backend.corpus_id, retrieval=backend.mode)
     traced = asyncio.run(
         loop.run_traced(
             Task(question=setup.question),
             provider=setup.provider,
             model=setup.model,
             tool_format=setup.tool_format,
+            corpus=corpus,
         )
     )
     trace_out.parent.mkdir(parents=True, exist_ok=True)
     write_trace(traced.trace, trace_out)
     state = traced.state
     if backend is not None:
-        mode = args.retrieval or "lexical"
-        print(f"corpus: {backend.corpus_id} ({mode}), verifier: {verifier_name}")
+        print(f"corpus: {backend.corpus_id} ({backend.mode}), verifier: {verifier_name}")
     print(f"run {run_id}: {state.terminal_label}")
     if state.answer is not None:
         print(f"answer: {state.answer}")

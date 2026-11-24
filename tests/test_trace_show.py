@@ -8,10 +8,14 @@ import pytest
 
 from agentic_research.tools import ErrorClass
 from agentic_research.trace import (
+    RUN_CONFIG_EVENT,
     BudgetLimits,
     BudgetUsage,
+    ConfiguredBudgets,
+    CorpusConfig,
     ParseFailure,
     ProviderCallSpan,
+    RunConfig,
     RunSpan,
     RunStatus,
     SpanError,
@@ -112,6 +116,7 @@ def test_format_failed_trace() -> None:
         "  error bad_output/invalid_json: m",
         "  budget: steps 1/4, tool_calls 1/-, tokens 7/100, time 2.000s/30.000s",
         "  parse_failures: 1",
+        "  config: not recorded",
         "  event note @2.000s",
         "  step 0  [0.000s-1.500s]",
         '    tool_call calc attempt 1  args {"expression":"1+1"}  '
@@ -163,3 +168,32 @@ def test_steps_print_in_index_order_and_long_json_is_shortened() -> None:
 def test_max_chars_floor() -> None:
     with pytest.raises(ValueError, match="max_chars"):
         format_trace(failed_trace(), max_chars=3)
+
+
+def test_run_config_is_the_config_line_not_an_event() -> None:
+    config = RunConfig(
+        verifier="citations",
+        corpus=CorpusConfig(corpus_id="corpus\nfake-line", retrieval="hybrid"),
+        seed=7,
+        step_timeout_s=2.5,
+        budgets=ConfiguredBudgets(max_steps=4, max_tool_calls_per_tool=3, max_repairs=0),
+    )
+    events = [
+        SpanEvent(name=RUN_CONFIG_EVENT, at_s=0.0, attributes=config.model_dump(mode="json")),
+        SpanEvent(name="abstained", at_s=0.0, attributes={"reason": "r"}),
+    ]
+    run = RunSpan(
+        span_id="run",
+        start_s=0.0,
+        end_s=0.0,
+        question="q",
+        provider="p",
+        status=RunStatus.ABSTAINED,
+        events=events,
+    )
+    lines = format_trace(Trace(header=HEADER, spans=[run])).splitlines()
+    assert lines[-2:] == [
+        "  config: verifier=citations  corpus=corpus\\nfake-line (hybrid)  seed=7  "
+        "step_timeout=2.5  tool_calls_per_tool=3  repairs=0",
+        '  event abstained {"reason":"r"} @0.000s',
+    ]

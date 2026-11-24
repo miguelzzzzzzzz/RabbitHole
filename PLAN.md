@@ -459,6 +459,13 @@ Acceptance criteria
   scored 0).
 - A 3-task smoke suite is labelled `smoke-only` in its report and rejected
   from README claim generation.
+- Verifier gate (Chad, 2026-11-23): the runner reads each trace's
+  `run_config` event and scores answers and citations only from traces whose
+  `verifier` is `citations` (`RunConfig.citations_verified`). A trace with
+  another verifier (`accept-all`, `custom:*`) or no `run_config` (written
+  before 2026-11-24) is refused, or reported in its own flagged rows that
+  never feed claim tables. Tested with an `accept-all` trace and a
+  pre-`run_config` trace.
 
 Tests
 - Each grader: positive, negative, and edge cases (empty answer, multiple

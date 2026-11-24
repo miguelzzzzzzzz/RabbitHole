@@ -5,6 +5,9 @@ A trace file is one JSON object per line. The first line is a
 
 - `RunSpan` (exactly one, the root): the question, provider/model, final
   status, budget usage and limits, and the run's ``parse_failures`` count.
+  Traces written since 2026-11-24 carry one ``run_config`` event on it
+  (`RunConfig`: verifier, corpus and retrieval mode, retry seed, step
+  timeout and every budget limit); older traces have none.
 - `StepSpan`: one agent-loop step, child of the run.
 - `ProviderCallSpan`: one model call, child of a step. A reply that could
   not be parsed into an action carries a `ParseFailure` with a reason code.
@@ -19,7 +22,8 @@ wall-clock value is ``TraceHeader.started_at``.
 `Trace` checks the cross-span invariants (one root, unique ids, parents
 exist and have the right kind, contiguous step indexes, and the run's
 ``parse_failures`` equals the number of provider calls with a parse
-failure). Any change to these models that an older reader would reject is a
+failure, and at most one ``run_config`` event on the run span, which must
+be a valid `RunConfig`). Any change to these models that an older reader would reject is a
 new schema version.
 """
 
@@ -35,6 +39,7 @@ from pydantic import (
     ConfigDict,
     Field,
     JsonValue,
+    ValidationError,
     field_validator,
     model_validator,
 )
@@ -161,6 +166,60 @@ class BudgetLimits(_Record):
     tool_calls: Count | None = None
     tokens: Annotated[int, Field(ge=1)] | None = None
     time_s: Annotated[float, Field(gt=0.0, allow_inf_nan=False)] | None = None
+
+
+#: Name of the run span's configuration event (attributes: `RunConfig`).
+RUN_CONFIG_EVENT: Final = "run_config"
+
+#: The verifier label of `agentic_research.citations.CitationVerifier`.
+CITATION_VERIFIER: Final = "citations"
+
+RetrievalMode = Literal["lexical", "hybrid"]
+
+
+class CorpusConfig(_Record):
+    """The corpus a run's research tools searched."""
+
+    corpus_id: str = Field(min_length=1, max_length=200)
+    retrieval: RetrievalMode
+
+
+class ConfiguredBudgets(_Record):
+    """Every `agentic_research.agent.Budgets` limit as configured; ``None`` is unlimited.
+
+    `BudgetLimits` on the run span keeps its four v1 fields; this is the full
+    set, including the per-tool and repair limits.
+    """
+
+    max_steps: Annotated[int, Field(ge=1)] | None = None
+    max_tool_calls: Annotated[int, Field(ge=1)] | None = None
+    max_tool_calls_per_tool: Annotated[int, Field(ge=1)] | None = None
+    deadline_s: Annotated[float, Field(gt=0.0, allow_inf_nan=False)] | None = None
+    max_tokens: Annotated[int, Field(ge=1)] | None = None
+    max_repairs: Annotated[int, Field(ge=0)] | None = None
+
+
+class RunConfig(_Record):
+    """How a run was set up: the attributes of the run span's ``run_config`` event.
+
+    ``verifier`` is the label the final-answer verifier's class declares
+    (``citations`` for the `CitationVerifier`, ``accept-all`` for
+    `AcceptAll`, ``custom:<class>`` for a class without one). It records the
+    configuration; it is not an attestation, so a grader that needs verified
+    answers checks it and refuses or flags anything but ``citations``.
+    ``corpus`` is ``None`` when the run had no corpus.
+    """
+
+    verifier: str = Field(min_length=1, max_length=200)
+    corpus: CorpusConfig | None
+    seed: int
+    step_timeout_s: Annotated[float, Field(gt=0.0, allow_inf_nan=False)] | None
+    budgets: ConfiguredBudgets
+
+    @property
+    def citations_verified(self) -> bool:
+        """Whether final answers went through the citation verifier."""
+        return self.verifier == CITATION_VERIFIER
 
 
 class RunSpan(_Span):
@@ -302,11 +361,32 @@ class Trace(_Record):
                 f"run.parse_failures is {runs[0].parse_failures} but {failures} provider "
                 "call(s) have a parse_failure"
             )
+
+        configs = [e for e in runs[0].events if e.name == RUN_CONFIG_EVENT]
+        if len(configs) > 1:
+            raise ValueError(f"the run span has {len(configs)} {RUN_CONFIG_EVENT} events")
+        if configs:
+            try:
+                RunConfig.model_validate(configs[0].attributes)
+            except ValidationError as exc:
+                first = exc.errors(include_url=False, include_input=False)[0]
+                where = ".".join(str(part) for part in first["loc"]) or "attributes"
+                raise ValueError(
+                    f"invalid {RUN_CONFIG_EVENT} event: {where}: {first['msg']}"
+                ) from None
         return self
 
     @property
     def run(self) -> RunSpan:
         return next(s for s in self.spans if isinstance(s, RunSpan))
+
+    @property
+    def run_config(self) -> RunConfig | None:
+        """The run's `RunConfig`, or ``None`` for a trace written before it existed."""
+        for event in self.run.events:
+            if event.name == RUN_CONFIG_EVENT:
+                return RunConfig.model_validate(event.attributes)
+        return None
 
     def children(self, span_id: str) -> list[RunSpan | StepSpan | ProviderCallSpan | ToolCallSpan]:
         """Direct children of ``span_id``, in file order."""

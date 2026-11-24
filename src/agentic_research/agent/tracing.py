@@ -8,6 +8,8 @@ Span layout:
 
 - ``run`` (id ``run``): the root, written last. Its status, answer, error,
   budget usage/limits and ``parse_failures`` come from the final `RunState`.
+  Its first event, ``run_config`` at 0 s, is the `RunConfig` the loop
+  was set up with (verifier label, corpus, seed, step timeout, all budgets).
   ``budget_exhausted`` and ``abstained`` runs carry an event naming the
   budget kind or the abstain reason, because the v1 run span has no field
   for them.
@@ -48,9 +50,11 @@ from agentic_research.tools.base import ErrorClass, ToolResult
 from agentic_research.tools.executor import ToolExecution
 from agentic_research.trace.schema import (
     MAX_MESSAGE_CHARS,
+    RUN_CONFIG_EVENT,
     BudgetLimits,
     BudgetUsage,
     ProviderCallSpan,
+    RunConfig,
     RunSpan,
     RunStatus,
     Span,
@@ -237,6 +241,7 @@ class TraceRecorder:
         provider: str,
         model: str | None,
         tool_format: ToolFormat | None,
+        config: RunConfig,
     ) -> Trace:
         """The complete trace once ``state`` is terminal."""
         if not state.terminal:
@@ -246,7 +251,9 @@ class TraceRecorder:
         end = self.rel(at)
         for span in self._spans:  # children never outlast the run
             end = max(end, span.end_s)
-        events: list[SpanEvent] = []
+        events = [
+            SpanEvent(name=RUN_CONFIG_EVENT, at_s=0.0, attributes=config.model_dump(mode="json"))
+        ]
         error: SpanError | None = None
         detail = state.detail or ""
         if state.status is LoopStatus.BUDGET_EXHAUSTED:

@@ -10,11 +10,16 @@ from agentic_research.trace.io import (
     write_trace,
 )
 from agentic_research.trace.schema import (
+    CITATION_VERIFIER,
+    RUN_CONFIG_EVENT,
     SCHEMA_VERSION,
     BudgetLimits,
     BudgetUsage,
+    ConfiguredBudgets,
+    CorpusConfig,
     ParseFailure,
     ProviderCallSpan,
+    RunConfig,
     RunSpan,
     RunStatus,
     Span,
@@ -27,11 +32,16 @@ from agentic_research.trace.schema import (
 )
 
 __all__ = [
+    "CITATION_VERIFIER",
+    "RUN_CONFIG_EVENT",
     "SCHEMA_VERSION",
     "BudgetLimits",
     "BudgetUsage",
+    "ConfiguredBudgets",
+    "CorpusConfig",
     "ParseFailure",
     "ProviderCallSpan",
+    "RunConfig",
     "RunSpan",
     "RunStatus",
     "Span",

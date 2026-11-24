@@ -2,7 +2,9 @@
 
 One line per span, children under their parent: the run, then its steps in
 index order, each with its provider calls and tool attempts in file order.
-Events, errors and parse failures are shown on the span they belong to.
+Events, errors and parse failures are shown on the span they belong to;
+the run's ``run_config`` event is shown as its ``config:`` line (``config:
+not recorded`` for a trace written before the event existed).
 Every piece of text from the trace (questions, answers, tool output, error
 messages) is shown on one line with control characters escaped, so a trace
 cannot inject terminal escape sequences or fake extra lines, and long values
@@ -14,7 +16,9 @@ from __future__ import annotations
 import json
 
 from agentic_research.trace.schema import (
+    RUN_CONFIG_EVENT,
     ProviderCallSpan,
+    RunConfig,
     RunSpan,
     SpanError,
     SpanEvent,
@@ -65,7 +69,7 @@ def _events(events: list[SpanEvent], indent: str, max_chars: int) -> list[str]:
     return lines
 
 
-def _run_lines(run: RunSpan, max_chars: int) -> list[str]:
+def _run_lines(run: RunSpan, config: RunConfig | None, max_chars: int) -> list[str]:
     describe = [f"provider={_one_line(run.provider, max_chars)}"]
     if run.model is not None:
         describe.append(f"model={_one_line(run.model, max_chars)}")
@@ -90,8 +94,32 @@ def _run_lines(run: RunSpan, max_chars: int) -> list[str]:
         f"time {_limit(used.time_s, limits.time_s, '{:.3f}s')}"
     )
     lines.append(f"  parse_failures: {run.parse_failures}")
-    lines.extend(_events(run.events, "  ", max_chars))
+    lines.append(f"  config: {_config(config, max_chars)}")
+    others = [e for e in run.events if e.name != RUN_CONFIG_EVENT]
+    lines.extend(_events(others, "  ", max_chars))
     return lines
+
+
+def _optional(value: float | None) -> str:
+    if value is None:
+        return "-"
+    return f"{value:g}" if isinstance(value, float) else str(value)
+
+
+def _config(config: RunConfig | None, max_chars: int) -> str:
+    if config is None:
+        return "not recorded"
+    if config.corpus is None:
+        corpus = "none"
+    else:
+        corpus = f"{_one_line(config.corpus.corpus_id, max_chars)} ({config.corpus.retrieval})"
+    budgets = config.budgets
+    return (
+        f"verifier={_one_line(config.verifier, max_chars)}  corpus={corpus}  "
+        f"seed={config.seed}  step_timeout={_optional(config.step_timeout_s)}  "
+        f"tool_calls_per_tool={_optional(budgets.max_tool_calls_per_tool)}  "
+        f"repairs={_optional(budgets.max_repairs)}"
+    )
 
 
 def _provider_line(span: ProviderCallSpan, max_chars: int) -> str:
@@ -139,7 +167,7 @@ def format_trace(trace: Trace, *, max_chars: int = DEFAULT_MAX_CHARS) -> str:
         f"generator {_one_line(header.generator, max_chars)}",
     ]
     run = trace.run
-    lines.extend(_run_lines(run, max_chars))
+    lines.extend(_run_lines(run, trace.run_config, max_chars))
     steps = sorted(
         (s for s in trace.children(run.span_id) if isinstance(s, StepSpan)),
         key=lambda s: s.index,

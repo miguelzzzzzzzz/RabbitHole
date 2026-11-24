@@ -95,6 +95,7 @@ class ToolExecutor:
         sleeper: Sleeper = asyncio.sleep,
     ) -> None:
         self._registry = registry
+        self._seed = seed
         self._rng = random.Random(seed)
         self._clock = clock
         self._sleeper = sleeper
@@ -103,6 +104,11 @@ class ToolExecutor:
     def registry(self) -> ToolRegistry:
         """The tools this executor runs (the agent loop checks evidence tools at start)."""
         return self._registry
+
+    @property
+    def seed(self) -> int:
+        """The backoff-jitter seed (recorded in the trace's ``run_config``)."""
+        return self._seed
 
     @property
     def clock(self) -> Clock:

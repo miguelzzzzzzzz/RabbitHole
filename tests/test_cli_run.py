@@ -133,9 +133,28 @@ def test_question_override_tool_format_and_budgets(tmp_path: Path) -> None:
     trace = read_trace(out)
     assert trace.run.question == "What is 2+2?"
     assert trace.run.tool_format == "json"
-    assert trace.run.events[0].attributes == {"kind": "tool_calls"}
+    assert [(e.name, e.attributes) for e in trace.run.events[1:]] == [
+        ("budget_exhausted", {"kind": "tool_calls"})
+    ]
     limits = trace.run.budget_limits
     assert (limits.steps, limits.tool_calls, limits.tokens, limits.time_s) == (5, 1, 100, 60.0)
+    # The run_config event repeats the limits and adds what the run span has no field for.
+    config = trace.run_config
+    assert config is not None
+    assert (config.verifier, config.corpus, config.seed, config.step_timeout_s) == (
+        "accept-all",
+        None,
+        3,
+        None,
+    )
+    assert config.budgets.model_dump() == {
+        "max_steps": 5,
+        "max_tool_calls": 1,
+        "max_tool_calls_per_tool": None,
+        "deadline_s": 60.0,
+        "max_tokens": 100,
+        "max_repairs": None,
+    }
 
 
 @pytest.mark.parametrize(
@@ -201,14 +220,16 @@ def test_trace_show_prints_the_span_tree(
     lines = capsys.readouterr().out.splitlines()
     assert lines[0].startswith("trace show  schema v1  started ")
     assert lines[1].startswith("run answered  provider=scripted model=scripted tool_format=native")
-    assert lines[2:6] == [
+    assert lines[2:7] == [
         "  question: What is 6*7?",
         "  answer: 6*7 = 42.",
         lines[4],
         "  parse_failures: 0",
+        "  config: verifier=accept-all  corpus=none  seed=0  step_timeout=-  "
+        "tool_calls_per_tool=-  repairs=-",
     ]
     assert lines[4].startswith("  budget: steps 2/8, tool_calls 1/-, tokens 305/-, time ")
-    body = [line.split("  [")[0] for line in lines[6:]]
+    body = [line.split("  [")[0] for line in lines[7:]]
     assert body == [
         "  step 0",
         "    provider_call scripted/scripted  format=native  tokens in=120 out=18  "

@@ -109,10 +109,16 @@ from agentic_research.agent.state import (
     Verdict,
 )
 from agentic_research.agent.tracing import TraceRecorder
-from agentic_research.agent.verifier import AcceptAll, Verifier
+from agentic_research.agent.verifier import AcceptAll, Verifier, verifier_label
 from agentic_research.tools.base import ErrorClass, ToolContext, ToolResult
 from agentic_research.tools.executor import ToolExecutor
-from agentic_research.trace.schema import ToolFormat, Trace
+from agentic_research.trace.schema import (
+    ConfiguredBudgets,
+    CorpusConfig,
+    RunConfig,
+    ToolFormat,
+    Trace,
+)
 
 POLICY_TIMEOUT = "policy_timeout"
 POLICY_ERROR = "policy_error"
@@ -200,14 +206,25 @@ class AgentLoop:
         model: str | None = None,
         tool_format: ToolFormat | None = None,
         started_at: datetime | None = None,
+        corpus: CorpusConfig | None = None,
     ) -> TracedRun:
         """Run ``task`` and return the final state with its trace.
 
         ``provider``, ``model`` and ``tool_format`` describe the policy on the
         run span (``none`` for policies that call no model); ``started_at``
         is the header's wall-clock start (now, in UTC, by default).
+        ``corpus`` names the corpus the research tools search, if any. The
+        run span's ``run_config`` event records it with the verifier label,
+        the executor's seed, the step timeout and every budget limit.
         """
         started_at = started_at if started_at is not None else datetime.now(UTC)
+        config = RunConfig(
+            verifier=verifier_label(self._verifier),
+            corpus=corpus,
+            seed=self._executor.seed,
+            step_timeout_s=self._step_timeout_s,
+            budgets=ConfiguredBudgets(**self._budgets.model_dump()),
+        )
         state = RunState(task=task)
         clock = self._executor.clock
         start = clock()
@@ -253,6 +270,7 @@ class AgentLoop:
             provider=provider,
             model=model,
             tool_format=tool_format,
+            config=config,
         )
         return TracedRun(state=state, trace=trace)
 

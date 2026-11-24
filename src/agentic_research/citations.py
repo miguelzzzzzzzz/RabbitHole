@@ -42,7 +42,7 @@ deadline still bound a slow backend. A backend failure other than an unknown
 from __future__ import annotations
 
 import asyncio
-from typing import Final
+from typing import ClassVar, Final
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -50,6 +50,7 @@ from agentic_research.agent.actions import Citation, FinalAnswer
 from agentic_research.agent.evidence import EvidenceStore
 from agentic_research.agent.state import RunState, Verdict
 from agentic_research.backends.base import SearchBackend, StoredDocument, UnknownDocumentError
+from agentic_research.trace.schema import CITATION_VERIFIER
 
 __all__ = [
     "INVALID_CITATION",
@@ -185,6 +186,9 @@ def feedback(issues: tuple[CitationIssue, ...], *, max_listed: int = 10) -> str:
 
 class CitationVerifier:
     """The `Verifier` that enforces valid, fresh and grounded citations."""
+
+    #: Recorded as ``run_config.verifier``; graders score only such traces.
+    label: ClassVar[str] = CITATION_VERIFIER
 
     def __init__(self, backend: SearchBackend) -> None:
         self._backend = backend

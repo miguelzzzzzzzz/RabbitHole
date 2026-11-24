@@ -109,6 +109,14 @@ def test_an_oracle_run_over_the_index_is_verified_and_answers(
     tools = _tools(trace)
     assert [t.tool for t in tools] == ["search_corpus", "read_document"]
     assert all(t.error is None for t in tools)
+    config = trace.run_config
+    assert config is not None and config.citations_verified
+    assert config.corpus is not None
+    assert (config.verifier, config.corpus.corpus_id, config.corpus.retrieval) == (
+        "citations",
+        FIXTURE_CORPUS_ID,
+        mode,
+    )
     output = tools[0].output
     assert output is not None and output["corpus_id"] == FIXTURE_CORPUS_ID
     passages = output["passages"]
@@ -139,6 +147,11 @@ def test_accept_all_turns_the_citation_check_off(
         f"corpus: {FIXTURE_CORPUS_ID} (lexical), verifier: accept-all",
         "run corpus: succeeded",
     ]
+    # Chad's 2026-11-23 spot-check: an accept-all run must not look verified.
+    config = read_trace(out).run_config
+    assert config is not None and config.corpus is not None
+    assert (config.verifier, config.corpus.corpus_id) == ("accept-all", FIXTURE_CORPUS_ID)
+    assert not config.citations_verified
 
 
 def test_a_misquoted_citation_is_rejected_as_invalid(
@@ -172,6 +185,8 @@ def test_an_oracle_run_without_a_corpus_has_only_the_calculator(
     assert code == 0
     stdout = capsys.readouterr().out
     assert "corpus:" not in stdout and "run calc: succeeded" in stdout
+    config = read_trace(out).run_config
+    assert config is not None and (config.verifier, config.corpus) == ("accept-all", None)
     calc, search = _tools(read_trace(out))
     assert calc.error is None and calc.output == {"value": 42}
     assert search.error is not None and search.error.reason == "unknown_tool"

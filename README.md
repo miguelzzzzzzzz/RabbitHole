@@ -96,7 +96,11 @@ that index, and the verifier defaults to `citations` (`--verifier
 accept-all` turns it off). The LLM policy's answers carry no claims until
 M5, so a scripted run's answer over a corpus is rejected as `no_citation`;
 the oracle trajectory above is accepted. The corpus, mode and verifier are
-printed but not yet recorded in the trace (M2 MINOR-5).
+printed and recorded in the trace: the run span's `run_config` event holds
+the verifier (`citations`, `accept-all`), the corpus id and retrieval mode,
+the retry seed, the step timeout and every budget limit, and `arp trace
+show` prints it as the run's `config:` line. Traces written before
+2026-11-24 have no such event (`config: not recorded`).
 
 Local model server (dev box only; CI never runs it), see
 [docs/local-models.md](docs/local-models.md):
