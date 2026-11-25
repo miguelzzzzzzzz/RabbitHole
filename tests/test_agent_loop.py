@@ -725,7 +725,8 @@ async def test_answer_accepted_only_after_the_deadline_is_not_honoured() -> None
     assert state.answer is None
     assert state.steps[0].verdict == Verdict.accept()  # the verdict is still recorded
     step = next(s for s in traced.trace.spans if isinstance(s, StepSpan))
-    assert [e.name for e in step.events] == ["answer_after_deadline"]
+    # The verifier did accept; the loop still refused to honour the late answer.
+    assert [e.name for e in step.events] == ["answer_accepted", "answer_after_deadline"]
 
 
 @pytest.mark.parametrize("step_timeout_s", [None, 60.0])

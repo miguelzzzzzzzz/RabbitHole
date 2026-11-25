@@ -23,8 +23,9 @@ wall-clock value is ``TraceHeader.started_at``.
 exist and have the right kind, contiguous step indexes, and the run's
 ``parse_failures`` equals the number of provider calls with a parse
 failure, and at most one ``run_config`` event on the run span, which must
-be a valid `RunConfig`). Any change to these models that an older reader would reject is a
-new schema version.
+be its first event, at 0 s, and a valid `RunConfig`). Which traces may feed
+answer and citation scores is `agentic_research.trace.gate`. Any change to
+these models that an older reader would reject is a new schema version.
 """
 
 from __future__ import annotations
@@ -170,6 +171,14 @@ class BudgetLimits(_Record):
 
 #: Name of the run span's configuration event (attributes: `RunConfig`).
 RUN_CONFIG_EVENT: Final = "run_config"
+
+#: Step event: the final-answer verifier accepted the step's answer
+#: (attributes: ``claims`` and ``citations`` counts).
+ANSWER_ACCEPTED_EVENT: Final = "answer_accepted"
+
+#: Step event: the verifier accepted the answer, but only at or after the run
+#: deadline, so the run ended ``budget_exhausted`` instead.
+ANSWER_AFTER_DEADLINE_EVENT: Final = "answer_after_deadline"
 
 #: The verifier label of `agentic_research.citations.CitationVerifier`.
 CITATION_VERIFIER: Final = "citations"
@@ -362,10 +371,13 @@ class Trace(_Record):
                 "call(s) have a parse_failure"
             )
 
-        configs = [e for e in runs[0].events if e.name == RUN_CONFIG_EVENT]
+        events = runs[0].events
+        configs = [e for e in events if e.name == RUN_CONFIG_EVENT]
         if len(configs) > 1:
             raise ValueError(f"the run span has {len(configs)} {RUN_CONFIG_EVENT} events")
         if configs:
+            if events[0] is not configs[0] or configs[0].at_s != 0.0:
+                raise ValueError(f"{RUN_CONFIG_EVENT} must be the run span's first event, at 0 s")
             try:
                 RunConfig.model_validate(configs[0].attributes)
             except ValidationError as exc:

@@ -229,7 +229,7 @@ def test_trace_show_prints_the_span_tree(
         "tool_calls_per_tool=-  repairs=-",
     ]
     assert lines[4].startswith("  budget: steps 2/8, tool_calls 1/-, tokens 305/-, time ")
-    body = [line.split("  [")[0] for line in lines[7:]]
+    body = [line.split("  [")[0].split(" @")[0] for line in lines[7:]]  # drop timings
     assert body == [
         "  step 0",
         "    provider_call scripted/scripted  format=native  tokens in=120 out=18  "
@@ -237,6 +237,7 @@ def test_trace_show_prints_the_span_tree(
         '    tool_call calculator attempt 1  args {"expression":"6*7"}  -> output {"value":42}',
         "  step 1",
         "    provider_call scripted/scripted  format=native  tokens in=160 out=7  finish=stop",
+        '    event answer_accepted {"citations":0,"claims":0}',
     ]
 
 

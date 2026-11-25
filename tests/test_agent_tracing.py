@@ -469,7 +469,9 @@ def test_verifier_rejection_is_a_step_event() -> None:
     assert [(e.name, e.attributes) for e in step0.events] == [
         ("answer_rejected", {"reason": "bad_answer"})
     ]
-    assert step1.events == []
+    assert [(e.name, e.attributes) for e in step1.events] == [
+        ("answer_accepted", {"claims": 0, "citations": 0})
+    ]
 
 
 @pytest.mark.parametrize("broken", ["raises", "returns"])

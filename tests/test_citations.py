@@ -56,6 +56,7 @@ from agentic_research.tools.base import (
 from agentic_research.tools.builtin import default_registry, research_registry
 from agentic_research.tools.read import MAX_READ_CHARS
 from agentic_research.tools.search import SearchCorpusOutput
+from agentic_research.trace.gate import require_citations_verified
 from agentic_research.trace.schema import RunSpan, StepSpan, Trace
 from rag_index import FIXTURE_CORPUS, FIXTURE_CORPUS_ID, build_index
 
@@ -357,6 +358,10 @@ async def test_oracle_search_read_answer_is_accepted(backend: SearchBackend) -> 
     verdict = state.steps[2].verdict
     assert verdict is not None and verdict.accepted
     assert state.counters.repairs == 0
+    # The acceptance is in the trace, and the trace passes the M4 verifier gate.
+    events = [(e.name, e.attributes) for e in _spans(traced.trace)[2].events]
+    assert events == [("answer_accepted", {"claims": 1, "citations": 1})]
+    assert require_citations_verified(traced.trace).verifier == "citations"
 
 
 async def test_an_unread_citation_is_repaired_by_reading_it() -> None:
@@ -385,6 +390,9 @@ async def test_an_unread_citation_is_repaired_by_reading_it() -> None:
     assert feedback_obs.text.startswith("answer rejected ungrounded_citation: 1 citation problem.")
     events = [(e.name, e.attributes) for e in _spans(traced.trace)[0].events]
     assert events == [("answer_rejected", {"reason": UNGROUNDED_CITATION})]
+    events = [(e.name, e.attributes) for e in _spans(traced.trace)[-1].events]
+    assert events == [("answer_accepted", {"claims": 1, "citations": 1})]
+    require_citations_verified(traced.trace)
 
 
 async def test_omitted_passages_of_a_cut_search_do_not_ground(backend: SearchBackend) -> None:

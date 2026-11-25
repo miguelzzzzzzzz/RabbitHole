@@ -113,6 +113,8 @@ from agentic_research.agent.verifier import AcceptAll, Verifier, verifier_label
 from agentic_research.tools.base import ErrorClass, ToolContext, ToolResult
 from agentic_research.tools.executor import ToolExecutor
 from agentic_research.trace.schema import (
+    ANSWER_ACCEPTED_EVENT,
+    ANSWER_AFTER_DEADLINE_EVENT,
     ConfiguredBudgets,
     CorpusConfig,
     RunConfig,
@@ -125,7 +127,11 @@ POLICY_ERROR = "policy_error"
 INVALID_ACTION = "invalid_action"
 VERIFIER_ERROR = "verifier_error"
 VERIFIER_TIMEOUT = "verifier_timeout"
-ANSWER_AFTER_DEADLINE = "answer_after_deadline"
+#: Step events: the verifier accepted the answer (attributes: ``claims``,
+#: ``citations``), and an accepted answer that came at or after the deadline.
+ANSWER_ACCEPTED = ANSWER_ACCEPTED_EVENT
+ANSWER_AFTER_DEADLINE = ANSWER_AFTER_DEADLINE_EVENT
+ANSWER_REJECTED = "answer_rejected"
 LATE_RESULT_IGNORED = "late_result_ignored"
 #: Step event: an evidence tool returned spans the policy was not shown in full.
 EVIDENCE_DROPPED_TRUNCATED = "evidence_dropped_truncated"
@@ -383,6 +389,13 @@ class AgentLoop:
             state.finish(RunStatus.FAILED, detail=VERIFIER_ERROR)
             return
         self._record(state, action, verdict=verdict)
+        if verdict.accepted:
+            rec.step_event(
+                ANSWER_ACCEPTED,
+                at=None,
+                claims=len(action.claims),
+                citations=sum(len(claim.citations) for claim in action.claims),
+            )
         if verdict.accepted and deadline is not None and self._executor.clock() >= deadline:
             # Accepted, but only at or after the deadline (cancellation latency, or a
             # verifier that advanced the loop's clock without the event loop seeing it).
@@ -391,7 +404,7 @@ class AgentLoop:
         elif verdict.accepted:
             state.finish(RunStatus.SUCCEEDED, answer=action.answer)
         else:
-            rec.step_event("answer_rejected", at=None, reason=verdict.reason)
+            rec.step_event(ANSWER_REJECTED, at=None, reason=verdict.reason)
             state.counters.repairs += 1
 
     async def _call_tool(

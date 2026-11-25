@@ -100,7 +100,14 @@ printed and recorded in the trace: the run span's `run_config` event holds
 the verifier (`citations`, `accept-all`), the corpus id and retrieval mode,
 the retry seed, the step timeout and every budget limit, and `arp trace
 show` prints it as the run's `config:` line. Traces written before
-2026-11-24 have no such event (`config: not recorded`).
+2026-11-24 have no such event (`config: not recorded`). An accepted answer
+is an `answer_accepted` event on its step (with claim and citation counts).
+`agentic_research.trace.require_citations_verified` is the gate the M4
+scorer will apply: it takes only traces with exactly one leading
+`run_config` whose verifier is `citations`, and whose answered runs carry
+that acceptance on the last step; anything else is refused with a reason
+code. It checks how the run was configured and recorded, not that the
+answer is correct.
 
 Local model server (dev box only; CI never runs it), see
 [docs/local-models.md](docs/local-models.md):

@@ -426,6 +426,16 @@ def _invalid_trees() -> list[tuple[str, list[Span], str]]:
             "the run span has 2 run_config events",
         ),
         (
+            "config not first",
+            _replaced(spans, "r", events=[SpanEvent(name="note", at_s=0.0), _config_event()]),
+            "run_config must be the run span's first event, at 0 s",
+        ),
+        (
+            "config not at 0 s",
+            _replaced(spans, "r", events=[_config_event().model_copy(update={"at_s": 0.5})]),
+            "run_config must be the run span's first event, at 0 s",
+        ),
+        (
             "config without verifier",
             _replaced(spans, "r", events=[_config_event(verifier=None)]),
             "invalid run_config event: verifier: Field required",

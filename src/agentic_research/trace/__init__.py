@@ -1,5 +1,6 @@
-"""Versioned JSONL run traces (ADR-0008)."""
+"""Versioned JSONL run traces (ADR-0008) and the verifier gate for scoring them."""
 
+from agentic_research.trace.gate import GateRefusal, TraceGateError, require_citations_verified
 from agentic_research.trace.io import (
     TraceError,
     TraceSchemaVersionError,
@@ -10,6 +11,8 @@ from agentic_research.trace.io import (
     write_trace,
 )
 from agentic_research.trace.schema import (
+    ANSWER_ACCEPTED_EVENT,
+    ANSWER_AFTER_DEADLINE_EVENT,
     CITATION_VERIFIER,
     RUN_CONFIG_EVENT,
     SCHEMA_VERSION,
@@ -32,6 +35,8 @@ from agentic_research.trace.schema import (
 )
 
 __all__ = [
+    "ANSWER_ACCEPTED_EVENT",
+    "ANSWER_AFTER_DEADLINE_EVENT",
     "CITATION_VERIFIER",
     "RUN_CONFIG_EVENT",
     "SCHEMA_VERSION",
@@ -39,6 +44,7 @@ __all__ = [
     "BudgetUsage",
     "ConfiguredBudgets",
     "CorpusConfig",
+    "GateRefusal",
     "ParseFailure",
     "ProviderCallSpan",
     "RunConfig",
@@ -51,11 +57,13 @@ __all__ = [
     "ToolCallSpan",
     "Trace",
     "TraceError",
+    "TraceGateError",
     "TraceHeader",
     "TraceSchemaVersionError",
     "TraceWriter",
     "dumps_trace",
     "loads_trace",
     "read_trace",
+    "require_citations_verified",
     "write_trace",
 ]

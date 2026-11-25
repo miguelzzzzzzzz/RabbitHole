@@ -26,7 +26,13 @@ from agentic_research.tools.builtin import (
     research_registry,
 )
 from agentic_research.tools.executor import ToolExecutor
-from agentic_research.trace import Trace, read_trace
+from agentic_research.trace import (
+    GateRefusal,
+    Trace,
+    TraceGateError,
+    read_trace,
+    require_citations_verified,
+)
 from agentic_research.trace.schema import StepSpan, ToolCallSpan
 from rag_index import FIXTURE_CORPUS, FIXTURE_CORPUS_ID, build_index
 
@@ -123,6 +129,7 @@ def test_an_oracle_run_over_the_index_is_verified_and_answers(
     assert isinstance(passages, list)
     assert VELMORA_DOC_ID in {p["doc_id"] for p in passages if isinstance(p, dict)}
     assert _rejections(trace) == []
+    assert require_citations_verified(trace) == config
 
 
 def test_the_citation_verifier_is_on_by_default_with_a_corpus(
@@ -152,6 +159,9 @@ def test_accept_all_turns_the_citation_check_off(
     assert config is not None and config.corpus is not None
     assert (config.verifier, config.corpus.corpus_id) == ("accept-all", FIXTURE_CORPUS_ID)
     assert not config.citations_verified
+    with pytest.raises(TraceGateError) as excinfo:
+        require_citations_verified(read_trace(out))
+    assert excinfo.value.reason is GateRefusal.NOT_CITATIONS_VERIFIED
 
 
 def test_a_misquoted_citation_is_rejected_as_invalid(
