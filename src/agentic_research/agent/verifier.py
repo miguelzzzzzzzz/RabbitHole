@@ -16,9 +16,9 @@ class Verifier(Protocol):
 
     A rejection becomes a repair: the loop records the verdict on the step,
     charges one repair, and asks the policy again. Like a policy, a verifier
-    gets a copy of the run state. A verifier class may declare a ``label``
-    class attribute; the trace's ``run_config`` event records it (see
-    `verifier_label`).
+    gets a copy of the run state. The trace's ``run_config`` event names the
+    verifier (see `verifier_label`); only the built-in verifiers get a
+    reserved label, so any other class is recorded as ``custom:...``.
     """
 
     async def verify(self, answer: FinalAnswer, state: RunState) -> Verdict: ...
@@ -36,12 +36,22 @@ class AcceptAll:
 def verifier_label(verifier: Verifier) -> str:
     """The name a trace records for ``verifier``.
 
-    The ``label`` its class declares (``accept-all``, ``citations``), or
-    ``custom:<class qualname>`` when the class declares none (or a non-string
-    or empty one), cut to `MAX_LABEL_CHARS`. Read from the class, not the
-    instance, so an instance attribute cannot change what the trace says.
+    The labels ``accept-all`` and ``citations`` are reserved: a verifier gets
+    one only when its exact class (``type(verifier) is ...``, so not a
+    subclass, and not an object whose ``__class__`` claims to be one) is
+    `AcceptAll` or `agentic_research.citations.CitationVerifier`. Every other
+    verifier is ``custom:<module>.<qualname>`` of its class, whatever
+    ``label`` it declares, cut to `MAX_LABEL_CHARS`. A subclass of
+    `CitationVerifier` can override ``verify``, so it is not the citation
+    verifier as far as a grader is concerned (Chad's 2026-11-25 spot-check).
+    The label still records configuration, not an attestation: a trace file
+    can be edited.
     """
-    label = getattr(type(verifier), "label", None)
-    if not isinstance(label, str) or not label:
-        label = f"custom:{type(verifier).__qualname__}"
-    return label[:MAX_LABEL_CHARS]
+    # Imported here: `agentic_research.citations` imports `agentic_research.agent`.
+    from agentic_research.citations import CitationVerifier
+
+    cls = type(verifier)
+    for reserved in (AcceptAll, CitationVerifier):
+        if cls is reserved:
+            return reserved.label
+    return f"custom:{cls.__module__}.{cls.__qualname__}"[:MAX_LABEL_CHARS]

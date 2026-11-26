@@ -26,6 +26,7 @@ from agentic_research.agent import (
     Task,
     ToolCall,
     Verdict,
+    Verifier,
 )
 from agentic_research.agent.policy import ProviderCallInfo
 from agentic_research.agent.state import RunStatus as LoopStatus
@@ -63,6 +64,7 @@ from agentic_research.trace import (
     RUN_CONFIG_EVENT,
     ConfiguredBudgets,
     CorpusConfig,
+    GateRefusal,
     ParseFailure,
     ProviderCallSpan,
     RunConfig,
@@ -72,8 +74,10 @@ from agentic_research.trace import (
     StepSpan,
     ToolCallSpan,
     Trace,
+    TraceGateError,
     dumps_trace,
     loads_trace,
+    require_citations_verified,
 )
 
 TASK = Task(question="What is 6*7?", task_id="t-1")
@@ -665,6 +669,42 @@ class _EmptyLabel(_Unlabelled):
     label = ""
 
 
+class _ClaimsCitations(_Unlabelled):
+    """An unrelated class declaring the reserved ``citations`` label."""
+
+    label = CITATION_VERIFIER
+
+
+class _ClaimsAcceptAll(_Unlabelled):
+    label = "accept-all"
+
+
+class _CitationSubclass(CitationVerifier):
+    """Inherits ``label = "citations"`` but could override ``verify``."""
+
+
+class _CitationSubclassRelabelled(CitationVerifier):
+    label = CITATION_VERIFIER
+
+
+class _AcceptAllSubclass(AcceptAll):
+    pass
+
+
+class _PosesAsCitationVerifier(_Unlabelled):
+    """``isinstance`` is fooled by a ``__class__`` property; ``type()`` is not."""
+
+    label = CITATION_VERIFIER
+
+    @property  # type: ignore[misc]
+    def __class__(self) -> type:
+        return CitationVerifier
+
+
+def _custom(cls: type) -> str:
+    return f"custom:{cls.__module__}.{cls.__qualname__}"
+
+
 def test_run_config_records_the_loop_setup() -> None:
     time_ = FakeTime()
     budgets = Budgets(
@@ -686,7 +726,7 @@ def test_run_config_records_the_loop_setup() -> None:
     trace = asyncio.run(loop.run_traced(TASK, corpus=corpus, started_at=STARTED)).trace
     assert outcome_events(trace) == []  # answered: no other run event
     assert trace.run_config == RunConfig(
-        verifier="strict-v2",
+        verifier=_custom(_Labelled),
         corpus=corpus,
         seed=11,
         step_timeout_s=1.5,
@@ -718,21 +758,77 @@ def test_verifier_labels() -> None:
     backend = FixtureSearchBackend("c", {"a.md": "Text."})
     assert verifier_label(AcceptAll()) == "accept-all"
     assert verifier_label(CitationVerifier(backend)) == CITATION_VERIFIER == "citations"
-    assert verifier_label(_Labelled()) == "strict-v2"
-    for unlabelled in (_Unlabelled(), _BadLabel(), _EmptyLabel()):
-        name = type(unlabelled).__qualname__
-        assert verifier_label(unlabelled) == f"custom:{name}"
+    # Any other class is custom:<module>.<qualname>, whatever label it declares.
+    for other in (_Unlabelled(), _Labelled(), _BadLabel(), _EmptyLabel()):
+        assert verifier_label(other) == _custom(type(other))
+    assert verifier_label(_Labelled()) == "custom:test_agent_tracing._Labelled"
     # Read from the class: an instance cannot relabel itself as the citation verifier.
     sneaky = _Unlabelled()
     sneaky.label = CITATION_VERIFIER  # type: ignore[attr-defined]
-    assert verifier_label(sneaky) == "custom:_Unlabelled"
+    assert verifier_label(sneaky) == _custom(_Unlabelled)
     long_name = type("V" * 300, (_Unlabelled,), {})()
-    assert len(verifier_label(long_name)) == MAX_LABEL_CHARS
+    label = verifier_label(long_name)
+    assert len(label) == MAX_LABEL_CHARS
+    assert label.startswith("custom:test_agent_tracing.VVV")
 
 
-def test_a_custom_verifier_is_never_recorded_as_citations() -> None:
+@pytest.mark.parametrize(
+    "cls",
+    [
+        _ClaimsCitations,
+        _ClaimsAcceptAll,
+        _CitationSubclass,
+        _CitationSubclassRelabelled,
+        _AcceptAllSubclass,
+        _PosesAsCitationVerifier,
+    ],
+)
+def test_the_reserved_labels_go_only_to_the_builtin_classes(cls: type[Any]) -> None:
+    # Chad's 2026-11-25 spot-check: "citations" and "accept-all" are reserved for
+    # CitationVerifier and AcceptAll themselves; subclasses and unrelated classes
+    # that declare them are custom.
+    backend = FixtureSearchBackend("c", {"a.md": "Text."})
+    verifier = cls(backend) if issubclass(cls, CitationVerifier) else cls()
+    assert cls.label in {CITATION_VERIFIER, "accept-all"}
+    assert verifier_label(verifier) == _custom(cls)
+
+
+def test_an_object_posing_as_the_citation_verifier_fools_isinstance_but_not_the_label() -> None:
+    poser = _PosesAsCitationVerifier()
+    assert isinstance(poser, CitationVerifier)  # why the label uses type(v) is ...
+    assert verifier_label(poser) == _custom(_PosesAsCitationVerifier)
+
+
+@pytest.mark.parametrize(
+    "verifier",
+    [_Unlabelled(), _ClaimsCitations(), _AcceptAllSubclass()],
+    ids=["unlabelled", "claims-citations", "accept-all-subclass"],
+)
+def test_a_custom_verifier_is_never_recorded_as_citations(verifier: Verifier) -> None:
     time_ = FakeTime()
-    _, trace = run(Scripted([FinalAnswer(answer="42")], time_), time_=time_, verifier=_Unlabelled())
+    _, trace = run(Scripted([FinalAnswer(answer="42")], time_), time_=time_, verifier=verifier)
     config = trace.run_config
-    assert config is not None and config.verifier == "custom:_Unlabelled"
+    assert config is not None and config.verifier == _custom(type(verifier))
     assert not config.citations_verified
+    with pytest.raises(TraceGateError) as excinfo:
+        require_citations_verified(trace)
+    assert excinfo.value.reason is GateRefusal.NOT_CITATIONS_VERIFIED
+
+
+def test_a_citation_verifier_subclass_run_is_refused_by_the_gate() -> None:
+    # Inherits label "citations" but accepts an uncited answer: never "citations".
+    class AcceptsAnything(CitationVerifier):
+        async def verify(self, answer: FinalAnswer, state: RunState) -> Verdict:
+            return Verdict.accept()
+
+    time_ = FakeTime()
+    verifier = AcceptsAnything(FixtureSearchBackend("c", {"a.md": "Text."}))
+    state, trace = run(Scripted([FinalAnswer(answer="42")], time_), time_=time_, verifier=verifier)
+    assert state.terminal_label == "succeeded"
+    config = trace.run_config
+    assert config is not None
+    assert config.verifier == _custom(AcceptsAnything)
+    assert ".<locals>.AcceptsAnything" in config.verifier
+    with pytest.raises(TraceGateError) as excinfo:
+        require_citations_verified(trace)
+    assert excinfo.value.reason is GateRefusal.NOT_CITATIONS_VERIFIED

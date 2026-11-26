@@ -211,11 +211,14 @@ class ConfiguredBudgets(_Record):
 class RunConfig(_Record):
     """How a run was set up: the attributes of the run span's ``run_config`` event.
 
-    ``verifier`` is the label the final-answer verifier's class declares
-    (``citations`` for the `CitationVerifier`, ``accept-all`` for
-    `AcceptAll`, ``custom:<class>`` for a class without one). It records the
-    configuration; it is not an attestation, so a grader that needs verified
-    answers checks it and refuses or flags anything but ``citations``.
+    ``verifier`` names the final-answer verifier: ``citations`` only for
+    `CitationVerifier` itself, ``accept-all`` only for `AcceptAll` itself,
+    and ``custom:<module>.<qualname>`` for every other class, subclasses and
+    classes declaring a reserved label included
+    (`agentic_research.agent.verifier.verifier_label`). It records the
+    configuration; it is not an attestation (a trace file can be edited), so
+    a grader that needs verified answers checks it and refuses or flags
+    anything but ``citations``.
     ``corpus`` is ``None`` when the run had no corpus.
     """
 

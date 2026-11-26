@@ -2,14 +2,17 @@
 
 Chad's 2026-11-24 spot-check: an accepted answer leaves a positive record in
 the trace, and the scorer refuses traces without exactly one leading
-``run_config`` whose verifier is ``citations``. Most traces here come from
-real `AgentLoop` runs (no model calls); the shapes the loop never writes are
-built by editing a real trace, with ``Trace.model_construct`` where `Trace`
-validation would already refuse them.
+``run_config`` whose verifier is ``citations``. Since his 2026-11-25
+spot-check only the real `CitationVerifier` is recorded as ``citations``, so
+every trace the gate accepts here comes from a real `AgentLoop` run with the
+real verifier over a one-document fixture corpus (no model calls); the
+shapes the loop never writes are built by editing such a trace, with
+``Trace.model_construct`` where `Trace` validation would already refuse them.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from typing import Any, ClassVar
 
 import pytest
@@ -27,12 +30,16 @@ from agentic_research.agent import (
     Verdict,
 )
 from agentic_research.agent.verifier import AcceptAll
+from agentic_research.backends import FixtureSearchBackend, Passage, StoredDocument
+from agentic_research.backends.base import make_doc_id
+from agentic_research.citations import NO_CITATION, CitationVerifier
 from agentic_research.policies.oracle import OraclePolicy
 from agentic_research.tools import ToolExecutor
-from agentic_research.tools.builtin import default_registry
+from agentic_research.tools.builtin import research_registry
 from agentic_research.trace import (
     ANSWER_ACCEPTED_EVENT,
     ANSWER_AFTER_DEADLINE_EVENT,
+    CITATION_VERIFIER,
     RUN_CONFIG_EVENT,
     GateRefusal,
     RunStatus,
@@ -44,27 +51,33 @@ from agentic_research.trace import (
     require_citations_verified,
 )
 
-TASK = Task(question="What is 6*7?")
-CALC = ToolCall(tool="calculator", args={"expression": "6*7"})
-CITATION = Citation(doc_id="d1", start=0, end=2, quote="42")
+CORPUS_ID = "gate"
+TEXT = "42 is the answer."
+DOC_ID = make_doc_id(CORPUS_ID, "answer.md")
+BACKEND = FixtureSearchBackend(CORPUS_ID, {"answer.md": TEXT})
+TASK = Task(question="What is the answer?")
+# Shows the whole one-paragraph document in full, so it grounds citations into it.
+SEARCH = ToolCall(tool="search_corpus", args={"query": "answer", "k": 1})
+CITATION = Citation(doc_id=DOC_ID, start=0, end=2, quote="42")
 CITED = FinalAnswer(
     answer="42",
     claims=(
-        Claim(text="It is 42.", citations=(CITATION, CITATION.model_copy(update={"end": 1}))),
+        Claim(
+            text="It is 42.",
+            citations=(CITATION, CITATION.model_copy(update={"end": 1, "quote": "4"})),
+        ),
         Claim(text="Still 42.", citations=(CITATION,)),
     ),
 )
-WRONG = FinalAnswer(answer="41")
+WRONG = FinalAnswer(answer="41")  # no claims: the citation verifier rejects it (no_citation)
 
 
 class LabelledCitations:
-    """Stands in for `CitationVerifier` (same label): rejects ``41``, accepts the rest."""
+    """Not the citation verifier, though it declares its label: accepts everything."""
 
-    label: ClassVar[str] = "citations"
+    label: ClassVar[str] = CITATION_VERIFIER
 
     async def verify(self, answer: FinalAnswer, state: RunState) -> Verdict:
-        if answer.answer == "41":
-            return Verdict.reject("bad_answer", "try again")
         return Verdict.accept()
 
 
@@ -72,15 +85,30 @@ class Unlabelled(LabelledCitations):
     label: ClassVar[str] = ""
 
 
-class LateCitations(LabelledCitations):
-    """Accepts, but moves the loop's clock past the deadline while verifying."""
+class CitationSubclass(CitationVerifier):
+    """Inherits ``label = "citations"`` and the real checks, but is not the real class."""
+
+
+class SlowDocuments:
+    """`BACKEND`, except each ``document`` lookup moves the loop's clock 5 s on.
+
+    Only the verifier looks documents up in a search-then-answer run, so the
+    answer is checked (and accepted) past a 1 s deadline.
+    """
 
     def __init__(self, now: list[float]) -> None:
         self.now = now
 
-    async def verify(self, answer: FinalAnswer, state: RunState) -> Verdict:
+    @property
+    def corpus_id(self) -> str:
+        return BACKEND.corpus_id
+
+    def search(self, query: str, k: int, filters: Mapping[str, str] | None = None) -> list[Passage]:
+        return BACKEND.search(query, k, filters)
+
+    def document(self, doc_id: str) -> StoredDocument:
         self.now[0] += 5.0
-        return Verdict.accept()
+        return BACKEND.document(doc_id)
 
 
 async def _run(
@@ -93,9 +121,9 @@ async def _run(
     clock = [0.0] if now is None else now
     loop = AgentLoop(
         OraclePolicy(actions),
-        ToolExecutor(default_registry(), clock=lambda: clock[0]),
+        ToolExecutor(research_registry(BACKEND), clock=lambda: clock[0]),
         budgets or Budgets(max_steps=4),
-        verifier=LabelledCitations() if verifier is None else verifier,
+        verifier=CitationVerifier(BACKEND) if verifier is None else verifier,
         run_id="gate",
     )
     return (await loop.run_traced(TASK)).trace
@@ -129,7 +157,7 @@ def _refusal(trace: Trace) -> GateRefusal:
 
 
 async def test_an_accepted_answer_is_a_step_event_with_claim_counts() -> None:
-    trace = await _run([CALC, CITED])
+    trace = await _run([SEARCH, CITED])
     step0, step1 = _steps(trace)
     assert _events(step0) == []
     assert _events(step1) == [(ANSWER_ACCEPTED_EVENT, {"claims": 2, "citations": 3})]
@@ -139,10 +167,10 @@ async def test_an_accepted_answer_is_a_step_event_with_claim_counts() -> None:
 
 
 async def test_a_repaired_answer_is_rejected_then_accepted_and_passes_the_gate() -> None:
-    trace = await _run([WRONG, CITED])
-    step0, step1 = _steps(trace)
-    assert _events(step0) == [("answer_rejected", {"reason": "bad_answer"})]
-    assert [name for name, _ in _events(step1)] == [ANSWER_ACCEPTED_EVENT]
+    trace = await _run([SEARCH, WRONG, CITED])
+    _, step1, step2 = _steps(trace)
+    assert _events(step1) == [("answer_rejected", {"reason": NO_CITATION})]
+    assert [name for name, _ in _events(step2)] == [ANSWER_ACCEPTED_EVENT]
     assert trace.run.status is RunStatus.ANSWERED
     assert require_citations_verified(trace).verifier == "citations"
 
@@ -150,8 +178,8 @@ async def test_a_repaired_answer_is_rejected_then_accepted_and_passes_the_gate()
 @pytest.mark.parametrize(
     ("actions", "status"),
     [
-        ([CALC, GiveUp(reason="not_in_corpus")], RunStatus.ABSTAINED),
-        ([WRONG, WRONG], RunStatus.BUDGET_EXHAUSTED),  # out of repairs
+        ([SEARCH, GiveUp(reason="not_in_corpus")], RunStatus.ABSTAINED),
+        ([SEARCH, WRONG, WRONG], RunStatus.BUDGET_EXHAUSTED),  # out of repairs
     ],
 )
 async def test_unanswered_citation_runs_pass_with_no_acceptance(
@@ -167,10 +195,13 @@ async def test_unanswered_citation_runs_pass_with_no_acceptance(
 async def test_an_answer_accepted_after_the_deadline_passes_as_not_answered() -> None:
     now = [0.0]
     trace = await _run(
-        [CITED], LateCitations(now), budgets=Budgets(max_steps=4, deadline_s=1.0), now=now
+        [SEARCH, CITED],
+        CitationVerifier(SlowDocuments(now)),
+        budgets=Budgets(max_steps=4, deadline_s=1.0),
+        now=now,
     )
     assert trace.run.status is RunStatus.BUDGET_EXHAUSTED and trace.run.answer is None
-    (step,) = _steps(trace)
+    _, step = _steps(trace)
     assert [name for name, _ in _events(step)] == [
         ANSWER_ACCEPTED_EVENT,
         ANSWER_AFTER_DEADLINE_EVENT,
@@ -181,24 +212,35 @@ async def test_an_answer_accepted_after_the_deadline_passes_as_not_answered() ->
 # --- run_config refusals ------------------------------------------------------------
 
 
-@pytest.mark.parametrize("verifier", [AcceptAll(), Unlabelled()], ids=["accept-all", "custom"])
-async def test_other_verifiers_are_refused(verifier: Any) -> None:
-    trace = await _run([CITED], verifier)
+@pytest.mark.parametrize(
+    ("verifier", "label"),
+    [
+        (AcceptAll(), "accept-all"),
+        (Unlabelled(), "custom:test_trace_gate.Unlabelled"),
+        (LabelledCitations(), "custom:test_trace_gate.LabelledCitations"),
+        (CitationSubclass(BACKEND), "custom:test_trace_gate.CitationSubclass"),
+    ],
+    ids=["accept-all", "unlabelled", "declares-citations", "citation-verifier-subclass"],
+)
+async def test_other_verifiers_are_refused(verifier: Any, label: str) -> None:
+    # The same run the real CitationVerifier passes (test above); only the class differs.
+    trace = await _run([SEARCH, CITED], verifier)
+    assert trace.run.status is RunStatus.ANSWERED
     config = trace.run_config
-    assert config is not None and config.verifier != "citations"
+    assert config is not None and config.verifier == label
     assert _refusal(trace) is GateRefusal.NOT_CITATIONS_VERIFIED
 
 
 async def test_a_trace_without_run_config_is_refused() -> None:
     # Written before 2026-11-24: Trace reads it, the gate never scores it.
-    trace = await _run([CITED])
+    trace = await _run([SEARCH, CITED])
     old = _edit(trace, "run", events=[])
     assert old.run_config is None
     assert _refusal(old) is GateRefusal.NO_RUN_CONFIG
 
 
 async def test_shapes_trace_validation_refuses_are_refused_by_the_gate_too() -> None:
-    trace = await _run([CITED])
+    trace = await _run([SEARCH, CITED])
     (config,) = trace.run.events
     note = SpanEvent(name="note", at_s=0.0)
     garbled = config.model_copy(update={"attributes": {**config.attributes, "seed": "zero"}})
@@ -219,13 +261,13 @@ async def test_shapes_trace_validation_refuses_are_refused_by_the_gate_too() -> 
 
 async def test_an_answered_run_without_answer_accepted_is_refused() -> None:
     # A trace from 2026-11-24 (run_config, but no answer_accepted yet).
-    trace = await _run([CALC, CITED])
+    trace = await _run([SEARCH, CITED])
     last = _steps(trace)[-1]
     assert _refusal(_edit(trace, last.span_id, events=[])) is GateRefusal.ANSWER_NOT_ACCEPTED
 
 
 async def test_acceptance_that_disagrees_with_the_run_is_refused() -> None:
-    answered = await _run([CALC, CITED])
+    answered = await _run([SEARCH, CITED])
     step0, step1 = _steps(answered)
     accepted = step1.events[0]
     late = SpanEvent(name=ANSWER_AFTER_DEADLINE_EVENT, at_s=accepted.at_s)
@@ -238,7 +280,7 @@ async def test_acceptance_that_disagrees_with_the_run_is_refused() -> None:
     for trace in (on_earlier_step, twice, on_both, answered_late):
         assert _refusal(trace) is GateRefusal.ACCEPTANCE_MISMATCH
 
-    abstained = await _run([CALC, GiveUp(reason="not_in_corpus")])
+    abstained = await _run([SEARCH, GiveUp(reason="not_in_corpus")])
     last = _steps(abstained)[-1]
     in_time = accepted.model_copy(update={"at_s": last.end_s})
     too_late = late.model_copy(update={"at_s": last.end_s})

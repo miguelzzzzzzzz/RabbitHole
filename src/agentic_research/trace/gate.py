@@ -9,7 +9,9 @@ citations. It accepts a trace only when:
   first event (zero is a trace written before 2026-11-24; two is an
   ambiguous record);
 - that event is a valid `RunConfig` whose ``verifier`` is ``citations``
-  (``accept-all`` and ``custom:*`` runs never had their citations checked);
+  (``accept-all`` and ``custom:*`` runs never had their citations checked;
+  the loop records ``citations`` only for `CitationVerifier` itself, not a
+  subclass or another class declaring that label);
 - the step events agree with the run's status: an ``answered`` run has
   exactly one ``answer_accepted`` event, on its last step (traces written
   before 2026-11-25 have none, so they are refused); any other run has none,

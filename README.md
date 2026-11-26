@@ -97,7 +97,9 @@ accept-all` turns it off). The LLM policy's answers carry no claims until
 M5, so a scripted run's answer over a corpus is rejected as `no_citation`;
 the oracle trajectory above is accepted. The corpus, mode and verifier are
 printed and recorded in the trace: the run span's `run_config` event holds
-the verifier (`citations`, `accept-all`), the corpus id and retrieval mode,
+the verifier (`citations` and `accept-all` are reserved for the built-in
+`CitationVerifier` and `AcceptAll` classes; any other verifier, a subclass
+included, is `custom:<module>.<qualname>`), the corpus id and retrieval mode,
 the retry seed, the step timeout and every budget limit, and `arp trace
 show` prints it as the run's `config:` line. Traces written before
 2026-11-24 have no such event (`config: not recorded`). An accepted answer
