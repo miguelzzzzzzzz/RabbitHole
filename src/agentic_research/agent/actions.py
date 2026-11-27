@@ -43,11 +43,17 @@ class Citation(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    doc_id: str = Field(min_length=1, max_length=64)
-    start: int = Field(ge=0)
-    end: int = Field(ge=1)
-    quote: str = Field(min_length=1)
-    content_hash: str | None = Field(default=None, pattern=r"^[0-9a-f]{64}$")
+    doc_id: str = Field(
+        min_length=1, max_length=64, description="Id of the cited document, as the tools gave it."
+    )
+    start: int = Field(ge=0, description="Start offset (inclusive) in the document text.")
+    end: int = Field(ge=1, description="End offset (exclusive); must be greater than start.")
+    quote: str = Field(min_length=1, description="The document text at [start, end), exactly.")
+    content_hash: str | None = Field(
+        default=None,
+        pattern=r"^[0-9a-f]{64}$",
+        description="The document's content_hash from the tool result, if given.",
+    )
 
     @model_validator(mode="after")
     def _check_range(self) -> Self:
@@ -61,8 +67,10 @@ class Claim(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
-    text: str = Field(min_length=1)
-    citations: tuple[Citation, ...] = ()
+    text: str = Field(min_length=1, description="One statement of the answer.")
+    citations: tuple[Citation, ...] = Field(
+        default=(), description="Passages that support the statement."
+    )
 
 
 class FinalAnswer(_Action):

@@ -15,7 +15,7 @@ import json
 import math
 import re
 from collections.abc import Iterable, Iterator, Mapping
-from typing import Any
+from typing import Any, TypeVar
 
 from pydantic import BaseModel, ValidationError
 
@@ -31,10 +31,17 @@ from agentic_research.tools.base import (
 #: OpenAI function names: 1-64 characters of letters, digits, ``_`` and ``-``.
 TOOL_NAME_PATTERN = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
 
+#: Names no registered tool may take. ``final_answer`` is the answer action
+#: (`agentic_research.tools.answer`): it ends the run and goes to the verifier,
+#: so it must never be run by the executor as an ordinary tool.
+RESERVED_TOOL_NAMES: frozenset[str] = frozenset({"final_answer"})
+
 #: Upper bound on one error message shown to the model.
 MAX_ERROR_MESSAGE_CHARS = 1000
 
 AnyTool = Tool[Any, Any]
+
+ArgsModelT = TypeVar("ArgsModelT", bound=BaseModel)
 
 
 class ToolRegistrationError(ValueError):
@@ -70,6 +77,58 @@ def _truncate(text: str) -> str:
     return text[: MAX_ERROR_MESSAGE_CHARS - 3] + "..."
 
 
+def parse_arguments(
+    name: str, args_model: type[ArgsModelT], arguments: Mapping[str, Any] | str | None
+) -> ArgsModelT | ToolError:
+    """Parse one call's ``arguments`` into ``args_model``, or an ``invalid_args`` error.
+
+    ``arguments`` may be a mapping or a JSON string (native ``tool_calls``
+    carry arguments as a string; duplicate keys are refused). ``None`` and an
+    empty string mean no arguments. ``name`` only labels the messages.
+    `ToolRegistry.validate_args` and the ``final_answer`` parser share it.
+    """
+    raw: object
+    if arguments is None or (isinstance(arguments, str) and not arguments.strip()):
+        raw = {}
+    elif isinstance(arguments, str):
+        try:
+            raw = json.loads(arguments, object_pairs_hook=_reject_duplicate_keys)
+        except json.JSONDecodeError as exc:
+            return ToolError(
+                error_class=ErrorClass.INVALID_ARGS,
+                reason="invalid_json",
+                message=f"arguments for {name!r} are not valid JSON: {exc.msg}",
+            )
+        except _DuplicateKeyError as exc:
+            return ToolError(
+                error_class=ErrorClass.INVALID_ARGS,
+                reason="duplicate_key",
+                message=_truncate(f"arguments for {name!r} repeat the key {exc.key!r}"),
+            )
+        except RecursionError:
+            return ToolError(
+                error_class=ErrorClass.INVALID_ARGS,
+                reason="invalid_json",
+                message=f"arguments for {name!r} are nested too deeply",
+            )
+    else:
+        raw = arguments
+    if not isinstance(raw, Mapping):
+        return ToolError(
+            error_class=ErrorClass.INVALID_ARGS,
+            reason="not_an_object",
+            message=f"arguments for {name!r} must be a JSON object, got {type(raw).__name__}",
+        )
+    try:
+        return args_model.model_validate(dict(raw))
+    except ValidationError as exc:
+        return ToolError(
+            error_class=ErrorClass.INVALID_ARGS,
+            reason="schema_violation",
+            message=_truncate(f"invalid arguments for {name!r}: {_format_validation_error(exc)}"),
+        )
+
+
 class ToolRegistry:
     """An ordered set of tools, keyed by unique name."""
 
@@ -83,6 +142,10 @@ class ToolRegistry:
         if not isinstance(name, str) or not TOOL_NAME_PATTERN.fullmatch(name):
             raise ToolRegistrationError(
                 f"tool name {name!r} must match {TOOL_NAME_PATTERN.pattern}"
+            )
+        if name in RESERVED_TOOL_NAMES:
+            raise ToolRegistrationError(
+                f"tool name {name!r} is reserved for the answer action, not a tool"
             )
         if name in self._tools:
             raise ToolRegistrationError(f"duplicate tool name: {name!r}")
@@ -170,7 +233,21 @@ class ToolRegistry:
         ``arguments`` may be a mapping or a JSON string (native ``tool_calls``
         carry arguments as a string). ``None`` and an empty string mean no
         arguments.
+
+        A reserved name (``final_answer``) is never a registered tool: it ends
+        the run instead of running, so a policy must turn it into a
+        `FinalAnswer` action (`agentic_research.tools.answer`). Asking the
+        registry to run it is ``invalid_args/reserved_tool_name``.
         """
+        if name in RESERVED_TOOL_NAMES:
+            return ToolError(
+                error_class=ErrorClass.INVALID_ARGS,
+                reason="reserved_tool_name",
+                message=(
+                    f"{name!r} is not a tool to run: it ends the run with your answer "
+                    "and is checked by the verifier"
+                ),
+            )
         tool = self._tools.get(name)
         if tool is None:
             known = ", ".join(self._tools) or "<none>"
@@ -179,48 +256,7 @@ class ToolRegistry:
                 reason="unknown_tool",
                 message=_truncate(f"unknown tool {name!r}; available tools: {known}"),
             )
-        raw: object
-        if arguments is None or (isinstance(arguments, str) and not arguments.strip()):
-            raw = {}
-        elif isinstance(arguments, str):
-            try:
-                raw = json.loads(arguments, object_pairs_hook=_reject_duplicate_keys)
-            except json.JSONDecodeError as exc:
-                return ToolError(
-                    error_class=ErrorClass.INVALID_ARGS,
-                    reason="invalid_json",
-                    message=f"arguments for {name!r} are not valid JSON: {exc.msg}",
-                )
-            except _DuplicateKeyError as exc:
-                return ToolError(
-                    error_class=ErrorClass.INVALID_ARGS,
-                    reason="duplicate_key",
-                    message=_truncate(f"arguments for {name!r} repeat the key {exc.key!r}"),
-                )
-            except RecursionError:
-                return ToolError(
-                    error_class=ErrorClass.INVALID_ARGS,
-                    reason="invalid_json",
-                    message=f"arguments for {name!r} are nested too deeply",
-                )
-        else:
-            raw = arguments
-        if not isinstance(raw, Mapping):
-            return ToolError(
-                error_class=ErrorClass.INVALID_ARGS,
-                reason="not_an_object",
-                message=f"arguments for {name!r} must be a JSON object, got {type(raw).__name__}",
-            )
-        try:
-            return tool.args_model.model_validate(dict(raw))
-        except ValidationError as exc:
-            return ToolError(
-                error_class=ErrorClass.INVALID_ARGS,
-                reason="schema_violation",
-                message=_truncate(
-                    f"invalid arguments for {name!r}: {_format_validation_error(exc)}"
-                ),
-            )
+        return parse_arguments(name, tool.args_model, arguments)
 
     def validate_output(self, name: str, output: object) -> ToolOutput | ToolError:
         """Check a tool's return value against its output model.

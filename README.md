@@ -31,8 +31,12 @@ policy was shown in full (long search observations are cut at passage
 boundaries; a truncated slice grounds nothing), and `final_answer` claims
 with citations checked by a `CitationVerifier` plugged into the loop
 (exact normalized text, `content_hash` freshness, groundedness in the
-evidence store; a rejection is repair feedback).
-Not built yet: model-backed `arp run` providers, `final_answer` in the LLM policy's reply format, `fetch_url`, `arp run` over a corpus, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
+evidence store; a rejection is repair feedback). `final_answer` also has a
+tool schema (`tools.answer`, listed by `arp tools schema`) and a parser from
+a model's call to a `FinalAnswer`; the name is reserved, so the executor never
+runs it as a tool. `arp run --index DIR --corpus-id ID` runs the oracle or
+scripted policy over a CitationNeeded index.
+Not built yet: model-backed `arp run` providers, `final_answer` in the LLM policy's reply format (the schema exists; M5 wires it in), `fetch_url`, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
 
 ## Architecture
 
@@ -64,7 +68,7 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 ```bash
 pip install -e ".[dev]"
 arp --version
-arp tools schema                  # all built-in tools, OpenAI `tools` format
+arp tools schema                  # all built-in tools + final_answer, OpenAI `tools` format
 arp tools schema --tool calculator
 arp doctor                        # MemAvailable + observed serve flags + /v1/models
 arp probe tool-calls              # frozen native vs json probe (local model)

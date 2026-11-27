@@ -3,9 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from typing import Final
+from typing import Any, Final
 
 from agentic_research.backends.base import BackendError, Passage, SearchBackend, StoredDocument
+from agentic_research.tools.answer import final_answer_schema
 from agentic_research.tools.calculator import CalculatorTool
 from agentic_research.tools.read import ReadDocumentTool
 from agentic_research.tools.registry import ToolRegistry
@@ -15,6 +16,7 @@ __all__ = [
     "NO_CORPUS_ID",
     "NoCorpusBackend",
     "catalog_registry",
+    "catalog_schemas",
     "default_registry",
     "research_registry",
 ]
@@ -27,7 +29,8 @@ def default_registry() -> ToolRegistry:
     """A fresh registry with every built-in tool that needs no corpus (``calculator``).
 
     The research tools need a `SearchBackend`; see `research_registry`.
-    ``fetch_url`` and ``final_answer`` join later in M3.
+    ``fetch_url`` joins later in M3. ``final_answer`` is never registered: it
+    is the answer action (`agentic_research.tools.answer`).
     """
     return ToolRegistry([CalculatorTool()])
 
@@ -63,3 +66,12 @@ def catalog_registry() -> ToolRegistry:
     `default_registry` or `research_registry` instead.
     """
     return research_registry(NoCorpusBackend())
+
+
+def catalog_schemas() -> list[dict[str, Any]]:
+    """Every built-in tool schema, then ``final_answer`` (``arp tools schema``).
+
+    ``final_answer`` is listed for the model but is not in any registry: a
+    call to it ends the run as a `FinalAnswer` (see `agentic_research.tools.answer`).
+    """
+    return [*catalog_registry().openai_schemas(), final_answer_schema()]

@@ -333,10 +333,10 @@ def test_tools_schema_lists_the_research_tools(capsys: pytest.CaptureFixture[str
     assert main(["tools", "schema"]) == 0
     schemas = json.loads(capsys.readouterr().out)
     names = [s["function"]["name"] for s in schemas]
-    assert names == ["calculator", "search_corpus", "read_document"]
+    assert names == ["calculator", "search_corpus", "read_document", "final_answer"]
     # The schemas do not depend on the corpus behind the tools.
     fixture = FixtureSearchBackend(FIXTURE_CORPUS_ID, {"a.md": "Alpha."})
-    assert schemas == research_registry(fixture).openai_schemas()
+    assert schemas[:-1] == research_registry(fixture).openai_schemas()
     assert main(["tools", "schema", "--tool", "read_document"]) == 0
     (read,) = json.loads(capsys.readouterr().out)
     assert set(read["function"]["parameters"]["required"]) == {"doc_id", "start", "end"}

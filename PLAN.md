@@ -293,6 +293,10 @@ Scope
   - `final_answer(answer, claims[{text, citations[{doc_id, start, end, quote, content_hash?}]}])`
     (`FinalAnswer.claims`, `Claim`, `Citation`; 2026-11-21: `doc_id` rather
     than `source_id`, the same id `search_corpus` and `read_document` use).
+    Its tool schema (`tools/answer.py`, 2026-11-27) is listed by
+    `arp tools schema`; the name is reserved, so it is never registered or
+    executed: a policy parses the call (`parse_final_answer`) into a
+    `FinalAnswer` for the verifier. The LLM policy uses it from M5.
 - `CitationVerifier`:
   - Validity: quote equals `documents.jsonl` normalized text at
     `[start_char:end_char]` exactly (not raw-file bytes).

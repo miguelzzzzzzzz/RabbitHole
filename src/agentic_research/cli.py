@@ -32,7 +32,7 @@ from agentic_research.policies.oracle import OraclePolicy
 from agentic_research.preflight import run_doctor
 from agentic_research.probe import run_probe_cli
 from agentic_research.providers.scripted import SCRIPTED_MODEL, ScriptedProvider, load_script
-from agentic_research.tools.builtin import catalog_registry, default_registry, research_registry
+from agentic_research.tools.builtin import catalog_schemas, default_registry, research_registry
 from agentic_research.tools.executor import ToolExecutor
 from agentic_research.tools.registry import ToolRegistry
 from agentic_research.trace import TraceError, read_trace, write_trace
@@ -53,11 +53,11 @@ class _PolicySetup:
 
 
 def _tools_schema(args: argparse.Namespace) -> int:
-    registry = catalog_registry()
-    schemas = registry.openai_schemas()
+    schemas = catalog_schemas()
     if args.tool is not None:
-        if args.tool not in registry:
-            known = ", ".join(registry.names)
+        names = [s["function"]["name"] for s in schemas]
+        if args.tool not in names:
+            known = ", ".join(names)
             print(f"arp: unknown tool {args.tool!r} (known: {known})", file=sys.stderr)
             return 2
         schemas = [s for s in schemas if s["function"]["name"] == args.tool]
