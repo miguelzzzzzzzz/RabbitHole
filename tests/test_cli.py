@@ -53,6 +53,7 @@ def test_tools_schema_prints_every_built_in_tool(capsys: pytest.CaptureFixture[s
         "calculator",
         "search_corpus",
         "read_document",
+        "fetch_url",
         "final_answer",
     ]
     # final_answer is listed for the model but never registered as a runnable tool.
@@ -97,8 +98,8 @@ def test_tools_schema_unknown_tool(capsys: pytest.CaptureFixture[str]) -> None:
     captured = capsys.readouterr()
     assert captured.out == ""
     assert (
-        "unknown tool 'nope' (known: calculator, search_corpus, read_document, final_answer)"
-        in captured.err
+        "unknown tool 'nope' (known: calculator, search_corpus, read_document, fetch_url, "
+        "final_answer)" in captured.err
     )
 
 

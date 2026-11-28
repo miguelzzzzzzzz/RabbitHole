@@ -290,6 +290,15 @@ Scope
   - `fetch_url(url)` serves the fixture map by default and does live HTTP
     only when `ARP_ALLOW_LIVE_FETCH=true` and the host is allowlisted.
     Output is HTML-to-text with offsets.
+    Built 2026-11-28 (`tools/fetch.py`): `fetch_url(url, start=0)` returns at
+    most 1500 chars of the extracted text with `content_hash`, `title`,
+    `text_length` and `origin` (`fixture`/`live`); URLs are normalized
+    (http/https, no user info); fixture pages win over live; with live fetch
+    off an unknown URL is `invalid_args/unknown_url`, a non-allowlisted host
+    `invalid_args/host_not_allowed`, both before any socket; redirects are
+    not followed. Fetched pages are observations but not citation evidence
+    (the verifier knows corpus documents only); how a fetch task's answer
+    is cited is decided with the `fetch` task category (M4) at the latest.
   - `final_answer(answer, claims[{text, citations[{doc_id, start, end, quote, content_hash?}]}])`
     (`FinalAnswer.claims`, `Claim`, `Citation`; 2026-11-21: `doc_id` rather
     than `source_id`, the same id `search_corpus` and `read_document` use).

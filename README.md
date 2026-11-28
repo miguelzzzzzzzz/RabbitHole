@@ -35,8 +35,11 @@ evidence store; a rejection is repair feedback). `final_answer` also has a
 tool schema (`tools.answer`, listed by `arp tools schema`) and a parser from
 a model's call to a `FinalAnswer`; the name is reserved, so the executor never
 runs it as a tool. `arp run --index DIR --corpus-id ID` runs the oracle or
-scripted policy over a CitationNeeded index.
-Not built yet: model-backed `arp run` providers, `final_answer` in the LLM policy's reply format (the schema exists; M5 wires it in), `fetch_url`, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
+scripted policy over a CitationNeeded index. `fetch_url` (`tools.fetch`)
+serves fixture pages as plain text with offsets; live HTTP happens only with
+`ARP_ALLOW_LIVE_FETCH=true` and an allowlisted host, and fetched pages are
+observations, not citation evidence (yet).
+Not built yet: model-backed `arp run` providers, `final_answer` in the LLM policy's reply format (the schema exists; M5 wires it in), `fetch_url` in `arp run` and citable fetched pages, guardrails, and evals. `arp probe tool-calls` has been run on the box (smoke-only; see [docs/providers.md](docs/providers.md)). Other evals are still "not run".
 
 ## Architecture
 
@@ -58,7 +61,8 @@ The agent is a hand-rolled loop (ADR-0001), not a framework. Planned shape
 | Search backends | `SearchBackend` contract; `RagEngineBackend` over a [CitationNeeded](https://github.com/miguelzzzzzzzz/CitationNeeded) `v1.0.0` index (format 2, explicit `corpus_id`, BM25 default, hybrid option, `search --json` `schema_version` gate); `FixtureSearchBackend` for tests | built (M3, in progress) |
 | Research tools | `search_corpus` (top-k passages with citation fields) and `read_document` (bounded slice of the normalized stored text) over any `SearchBackend`, run in a worker thread; `EvidenceStore` of the spans a run's policy was shown in full, built from its recorded steps and observations (search observations cut at passage boundaries); `arp run --index DIR --corpus-id ID` runs them over a CitationNeeded index, with `--provider oracle --trajectory FILE` for a fixed action list | built (M3, in progress) |
 | Citations | `FinalAnswer.claims` with `Citation`s (`doc_id`, `start`, `end`, `quote`, optional `content_hash`); `CitationVerifier` rejects `no_citation`, `invalid_citation` (unknown doc, offsets, quote), `stale_source` and `ungrounded_citation` with repair feedback (no entailment check: "verified" is not "correct"; correctness is graded in M4); `evidence_dropped_truncated` trace events with a `reason` | built (M3, in progress) |
-| `fetch_url`, guardrails | fixture-backed `fetch_url`; allowlists and injection flags | M3 |
+| `fetch_url` | fixture page map by URL; stdlib HTML-to-text with offsets, paged in 1500-char slices; live HTTP only with `ARP_ALLOW_LIVE_FETCH=true` and an exact-host allowlist (no redirects followed, size and content-type limits); never opens a socket otherwise (tested) | built (M3, in progress; not yet in `arp run`, pages not citable) |
+| Guardrails | untrusted-data envelope, injection flags, per-task tool/URL allowlists | M3 |
 | Task suites, graders, eval runner | programmatic trajectory graders; oracle and heuristic baselines | M4 |
 | Local LLM policy, record/replay | live runs on the local model; cassettes replay in CI | M5 |
 | Fault injection, ablations | tool errors, timeouts, malformed output, prompt injection | M6 |

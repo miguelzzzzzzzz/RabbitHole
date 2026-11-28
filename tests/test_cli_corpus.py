@@ -26,6 +26,7 @@ from agentic_research.tools.builtin import (
     research_registry,
 )
 from agentic_research.tools.executor import ToolExecutor
+from agentic_research.tools.fetch import FetchUrlTool
 from agentic_research.trace import (
     GateRefusal,
     Trace,
@@ -333,10 +334,11 @@ def test_tools_schema_lists_the_research_tools(capsys: pytest.CaptureFixture[str
     assert main(["tools", "schema"]) == 0
     schemas = json.loads(capsys.readouterr().out)
     names = [s["function"]["name"] for s in schemas]
-    assert names == ["calculator", "search_corpus", "read_document", "final_answer"]
-    # The schemas do not depend on the corpus behind the tools.
+    assert names == ["calculator", "search_corpus", "read_document", "fetch_url", "final_answer"]
+    # The schemas do not depend on the corpus (or the fetch pages) behind the tools.
     fixture = FixtureSearchBackend(FIXTURE_CORPUS_ID, {"a.md": "Alpha."})
-    assert schemas[:-1] == research_registry(fixture).openai_schemas()
+    pages = FetchUrlTool({"https://example.org/": "<p>Alpha.</p>"})
+    assert schemas[:-1] == research_registry(fixture, fetch=pages).openai_schemas()
     assert main(["tools", "schema", "--tool", "read_document"]) == 0
     (read,) = json.loads(capsys.readouterr().out)
     assert set(read["function"]["parameters"]["required"]) == {"doc_id", "start", "end"}

@@ -89,7 +89,13 @@ def test_schema_is_openai_format_and_valid_json_schema() -> None:
 
 def test_catalog_lists_final_answer_last_and_only_once() -> None:
     names = [s["function"]["name"] for s in catalog_schemas()]
-    assert names == ["calculator", "search_corpus", "read_document", "final_answer"]
+    assert names == [
+        "calculator",
+        "search_corpus",
+        "read_document",
+        "fetch_url",
+        "final_answer",
+    ]
     assert catalog_schemas()[-1] == final_answer_schema()
 
 
