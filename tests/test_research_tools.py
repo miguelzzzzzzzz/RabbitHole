@@ -283,6 +283,13 @@ async def test_read_allows_exactly_the_maximum_range() -> None:
         {"doc_id": "VELMORA", "start": 0, "end": 5},
         {"doc_id": VELMORA_DOC_ID.upper(), "start": 0, "end": 5},
         {"doc_id": VELMORA_DOC_ID, "start": 0, "end": 5, "extra": 1},
+        # Offsets refuse what lax mode would coerce (`Offset`, Chad's 2026-11-27 note).
+        {"doc_id": VELMORA_DOC_ID, "start": False, "end": 5},
+        {"doc_id": VELMORA_DOC_ID, "start": 0, "end": True},
+        {"doc_id": VELMORA_DOC_ID, "start": 0.0, "end": 5},
+        {"doc_id": VELMORA_DOC_ID, "start": 0, "end": 5.0},
+        {"doc_id": VELMORA_DOC_ID, "start": "0.0", "end": 5},
+        {"doc_id": VELMORA_DOC_ID, "start": 0, "end": "1_0"},
     ],
 )
 async def test_read_schema_violations_are_invalid_args(args: dict[str, Any]) -> None:
@@ -290,6 +297,19 @@ async def test_read_schema_violations_are_invalid_args(args: dict[str, Any]) -> 
     result = await _call(research_registry(probe), "read_document", args)
     assert _error(result)[0] == "invalid_args"
     assert probe.threads == []
+
+
+async def test_read_accepts_integer_strings_as_offsets(backend: SearchBackend) -> None:
+    # Lax mode still reads a string of digits as an integer, as for every tool.
+    document = backend.document(VELMORA_DOC_ID)
+    result = await _call(
+        research_registry(backend),
+        "read_document",
+        json.dumps({"doc_id": VELMORA_DOC_ID, "start": "17", "end": "60"}),
+    )
+    output = ReadDocumentOutput.model_validate(result.output)
+    assert (output.start_char, output.end_char) == (17, 60)
+    assert output.text == document.text[17:60]
 
 
 async def test_read_start_past_the_end_is_out_of_range(backend: SearchBackend) -> None:

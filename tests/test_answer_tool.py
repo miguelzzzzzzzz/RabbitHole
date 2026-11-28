@@ -121,6 +121,13 @@ INVALID: list[tuple[str, Any]] = [
     ("negative_start", _args(claims=[{"text": "t", "citations": [_citation(start=-1)]}])),
     ("start_not_int", _args(claims=[{"text": "t", "citations": [_citation(start="zero")]}])),
     ("start_float", _args(claims=[{"text": "t", "citations": [_citation(start=0.5)]}])),
+    # Lax mode would read these as integers; offsets refuse them (Chad's 2026-11-27 note).
+    ("start_true", _args(claims=[{"text": "t", "citations": [_citation(start=True)]}])),
+    ("start_false", _args(claims=[{"text": "t", "citations": [_citation(start=False)]}])),
+    ("end_true", _args(claims=[{"text": "t", "citations": [_citation(start=0, end=True)]}])),
+    ("start_float_string", _args(claims=[{"text": "t", "citations": [_citation(start="0.0")]}])),
+    ("end_underscore_string", _args(claims=[{"text": "t", "citations": [_citation(end="1_0")]}])),
+    ("start_padded_string", _args(claims=[{"text": "t", "citations": [_citation(start=" 0")]}])),
     ("empty_doc_id", _args(claims=[{"text": "t", "citations": [_citation(doc_id="")]}])),
     ("long_doc_id", _args(claims=[{"text": "t", "citations": [_citation(doc_id="d" * 65)]}])),
     ("bad_hash", _args(claims=[{"text": "t", "citations": [_citation(content_hash="ABC")]}])),
@@ -171,6 +178,42 @@ def test_the_parser_accepts_integer_strings_like_every_tool() -> None:
     assert isinstance(answer, FinalAnswer)
     citation = answer.claims[0].citations[0]
     assert (citation.start, citation.end) == (0, 5)
+
+
+@pytest.mark.parametrize(
+    ("start", "end"), [(0.0, 5), (0, 5.0), (0.0, 5.0)], ids=["start", "end", "both"]
+)
+def test_integral_floats_are_refused_by_the_parser_only(start: float, end: float) -> None:
+    # JSON Schema's "integer" accepts a number with a zero fractional part (0.0);
+    # the parser refuses every float, so an offset is never a coerced float.
+    arguments = _args(claims=[{"text": "t", "citations": [_citation(start=start, end=end)]}])
+    validator = jsonschema.Draft202012Validator(final_answer_schema()["function"]["parameters"])
+    assert validator.is_valid(arguments)
+    error = parse_final_answer(arguments)
+    assert isinstance(error, ToolError)
+    assert error.reason == "schema_violation"
+    assert "not a float" in error.message
+
+
+def test_json_floats_and_booleans_are_refused_from_a_native_call() -> None:
+    # Native tool calls carry JSON text: 0.0 and true decode to float and bool.
+    for start, expected in (("0.0", "not a float"), ("true", "not a boolean")):
+        raw = (
+            '{"answer": "Alpha", "claims": [{"text": "t", "citations": '
+            f'[{{"doc_id": "d1", "start": {start}, "end": 5, "quote": "Alpha"}}]}}]}}'
+        )
+        error = parse_final_answer(raw)
+        assert isinstance(error, ToolError), start
+        assert error.reason == "schema_violation"
+        assert expected in error.message
+
+
+def test_citation_offsets_refuse_coercible_values_directly() -> None:
+    # The rule lives on `Citation`, so a FinalAnswer built any other way gets it too.
+    for bad in (True, False, 0.0, 2.5, "0.0", "+0", "1_0", " 0", ""):
+        with pytest.raises(ValueError, match="start"):
+            Citation(doc_id="d1", start=bad, end=5, quote="Alpha")  # type: ignore[arg-type]
+    assert Citation(doc_id="d1", start="0", end="5", quote="Alpha").start == 0  # type: ignore[arg-type]
 
 
 # --- parsing ----------------------------------------------------------------------------

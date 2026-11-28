@@ -8,10 +8,11 @@ can decide what to do without a ``try`` around each call (ADR-0006).
 from __future__ import annotations
 
 import random
+import re
 from enum import StrEnum
-from typing import Any, Protocol, Self, TypeVar
+from typing import Annotated, Any, Final, Protocol, Self, TypeVar
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
 
 
 class ErrorClass(StrEnum):
@@ -26,6 +27,30 @@ class ErrorClass(StrEnum):
 
 #: Only these classes may ever be retried (ADR-0006).
 RETRYABLE: frozenset[ErrorClass] = frozenset({ErrorClass.TRANSIENT, ErrorClass.TIMEOUT})
+
+
+_INTEGER_STRING: Final = re.compile(r"-?[0-9]+")
+
+
+def _integer_or_integer_string(value: object) -> object:
+    """Refuse booleans, floats and non-integer strings before pydantic's lax ``int``.
+
+    Lax mode would read ``True`` as 1, ``0.0`` as 0 and ``"0.0"`` or ``"1_000"``
+    as integers. A plain integer string such as ``"0"`` is still accepted, as
+    for every other integer argument.
+    """
+    if isinstance(value, bool):
+        raise ValueError("must be an integer, not a boolean")
+    if isinstance(value, float):
+        raise ValueError("must be an integer, not a float")
+    if isinstance(value, str) and not _INTEGER_STRING.fullmatch(value):
+        raise ValueError("must be an integer or a string of digits")
+    return value
+
+
+#: A character offset written by a model (citation and ``read_document`` ranges).
+#: The JSON schema is a plain ``integer``; see `_integer_or_integer_string`.
+Offset = Annotated[int, BeforeValidator(_integer_or_integer_string)]
 
 
 class ToolArgs(BaseModel):

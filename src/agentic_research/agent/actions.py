@@ -17,6 +17,8 @@ from typing import Annotated, Any, Literal, Self
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+from agentic_research.tools.base import Offset
+
 _CODE_PATTERN = r"^[a-z][a-z0-9_]*$"
 
 
@@ -38,7 +40,10 @@ class Citation(BaseModel):
     Offsets index the document's *normalized* stored text (CitationNeeded
     index format 2), the same offsets ``search_corpus`` and ``read_document``
     return. ``content_hash``, when given, names the document version the
-    quote was taken from.
+    quote was taken from. Offsets refuse booleans and floats (``True``,
+    ``0.0``) and non-integer strings (``"0.0"``), which pydantic's lax mode
+    would read as integers; a string of digits such as ``"0"`` is still read
+    as an integer (`agentic_research.tools.base.Offset`).
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -46,8 +51,8 @@ class Citation(BaseModel):
     doc_id: str = Field(
         min_length=1, max_length=64, description="Id of the cited document, as the tools gave it."
     )
-    start: int = Field(ge=0, description="Start offset (inclusive) in the document text.")
-    end: int = Field(ge=1, description="End offset (exclusive); must be greater than start.")
+    start: Offset = Field(ge=0, description="Start offset (inclusive) in the document text.")
+    end: Offset = Field(ge=1, description="End offset (exclusive); must be greater than start.")
     quote: str = Field(min_length=1, description="The document text at [start, end), exactly.")
     content_hash: str | None = Field(
         default=None,

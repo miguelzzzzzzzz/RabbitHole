@@ -27,6 +27,7 @@ from pydantic import Field, model_validator
 from agentic_research.backends.base import BackendError, SearchBackend, UnknownDocumentError
 from agentic_research.tools.base import (
     ErrorClass,
+    Offset,
     RetryPolicy,
     ToolArgs,
     ToolContext,
@@ -58,8 +59,8 @@ class ReadDocumentArgs(ToolArgs):
     doc_id: str = Field(
         pattern=_DOC_ID_PATTERN, description="doc_id of a passage returned by search_corpus."
     )
-    start: int = Field(ge=0, description="First character offset (inclusive).")
-    end: int = Field(
+    start: Offset = Field(ge=0, description="First character offset (inclusive).")
+    end: Offset = Field(
         ge=1,
         description=(
             f"End character offset (exclusive); at most {MAX_READ_CHARS} characters "
